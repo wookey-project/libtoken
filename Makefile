@@ -15,13 +15,21 @@ APP_BUILD_DIR = $(BUILD_DIR)/libs/$(LIB_NAME)
 CFLAGS := $(DEBUG_CFLAGS) $(WARN_CFLAGS) $(EMBED_CFLAGS) $(AFLAGS)
 CFLAGS += -ffreestanding
 CFLAGS += $(DRIVERS_CFLAGS)
-CFLAGS += -I$(PROJ_FILES)/include/generated -I$(PROJ_FILES) -I$(PROJ_FILES)/libs/std -I$(PROJ_FILES)/kernel/shared -I.
-# dependency on lower iso7816 interface
-CFLAGS += -I$(PROJ_FILES)/libs/iso7816/api
-CFLAGS += -MMD -MP -nostdlib
 
-LDFLAGS += -fno-builtin -nostdlib -nostartfiles
-LD_LIBS += -lg
+CFLAGS += -I$(PROJ_FILES)/externals/libecc/src
+CFLAGS += $(EXTERNAL_CFLAGS)
+
+CFLAGS += -I$(PROJ_FILES)/include/generated -I$(PROJ_FILES) -I$(PROJ_FILES)/libs/std -I$(PROJ_FILES)/kernel/shared -I. -Iapi
+# dependency on lower iso7816 interface
+CFLAGS += -I$(PROJ_FILES)/drivers/socs/$(SOC)/cryp/api
+CFLAGS += -I$(PROJ_FILES)/libs/smartcard/api
+CFLAGS += -I$(PROJ_FILES)/libs/wookey/api
+CFLAGS += -I$(PROJ_FILES)/libs/hmac
+CFLAGS += -I$(PROJ_FILES)/libs/aes
+CFLAGS += $(LIBSIGN_CFLAGS)
+CFLAGS += -MMD -MP -nostdlib
+# including secret keys dir
+CFLAGS += -I$(PRIVATE_DIR)
 
 BUILD_DIR ?= $(PROJ_FILE)build
 

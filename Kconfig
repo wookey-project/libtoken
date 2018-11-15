@@ -1,5 +1,5 @@
 config USR_LIB_TOKEN
-  select USR_LIB_ISO7816
+  select USR_LIB_SMARTCARD
   bool  "Wookey javacard tokens communication protocol API"
   default y
   ---help---
