@@ -1,0 +1,11 @@
+config USR_LIB_TOKEN
+  select USR_LIB_ISO7816
+  bool  "Wookey javacard tokens communication protocol API"
+  default y
+  ---help---
+  Support for communication with the Wookey project applets,
+  including AUTH and DFU tokens.
+config USR_LIB_TOKEN_CFLAGS
+  string
+  default " -I../../libs/token/api " if USR_LIB_TOKEN
+
