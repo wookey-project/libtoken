@@ -105,16 +105,18 @@ int dfu_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, u
 		goto err;
 	}
 
-        token_unlock_operations ops[] = { TOKEN_UNLOCK_INIT_TOKEN, TOKEN_UNLOCK_ASK_PET_PIN, TOKEN_UNLOCK_PRESENT_PET_PIN, TOKEN_UNLOCK_ESTABLISH_SECURE_CHANNEL, TOKEN_UNLOCK_CONFIRM_PET_NAME, TOKEN_UNLOCK_PRESENT_USER_PIN };
+        token_unlock_operations ops[] = { TOKEN_UNLOCK_INIT_TOKEN, TOKEN_UNLOCK_ASK_PET_PIN, TOKEN_UNLOCK_ESTABLISH_SECURE_CHANNEL, TOKEN_UNLOCK_PRESENT_PET_PIN, TOKEN_UNLOCK_CONFIRM_PET_NAME, TOKEN_UNLOCK_PRESENT_USER_PIN };
         if(dfu_token_unlock_ops_exec(channel, ops, sizeof(ops)/sizeof(token_unlock_operations), callbacks, decrypted_sig_pub_key_data, decrypted_sig_pub_key_data_len)){
                 goto err;
         }
 
+#if 0
 	unsigned char iv[] = "\xb9\xec\x9d\xce\x21\xf9\x3a\x68\xc5\x47\x0e\x2a\x52\xc8\x9b\x9e";
 	unsigned char iv_hmac[] = "\xbb\x31\x52\x34\xdb\x3f\x87\x82\x9c\x93\xc6\x56\x79\x71\x4d\x2c\xe1\x52\xd1\xa6\x71\xc4\x50\x98\x43\x7f\x7c\xba\x67\xeb\xe5\x3f";
 	if(dfu_token_begin_decrypt_session(channel, iv, 16, iv_hmac, 32)){
 		goto err;
 	}
+#endif
 
 	return 0;
 
