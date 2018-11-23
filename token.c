@@ -1,7 +1,8 @@
 /* Inlude elements related to ISO7816 and the board */
+#include "autoconf.h"
 #include "api/libtoken.h"
 #include "api/syscall.h"
-#define SMARTCARD_DEBUG
+#define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
 #define MEASURE_TOKEN_PERF
 
 #include "api/print.h"
@@ -678,7 +679,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
         goto err;
     }
 
-#ifdef SMARTCARD_DEBUG
+#if SMARTCARD_DEBUG
     SC_print_APDU(apdu);
 #endif
 #ifdef MEASURE_TOKEN_PERF
@@ -723,7 +724,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
 #ifdef MEASURE_TOKEN_PERF
     sys_get_systick(&end, PREC_MILLI);
 #endif
-#ifdef SMARTCARD_DEBUG
+#if SMARTCARD_DEBUG
     SC_print_RESP(resp);
 #endif
 #ifdef MEASURE_TOKEN_PERF
@@ -733,7 +734,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
     return 0;
 
 err:
-#ifdef SMARTCARD_DEBUG
+#if SMARTCARD_DEBUG
     printf("APDU send/receive error (secure channel or lower layers errors)\n");
 #endif
 

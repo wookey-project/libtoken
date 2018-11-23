@@ -9,3 +9,10 @@ config USR_LIB_TOKEN_CFLAGS
   string
   default " -I../../libs/token/api " if USR_LIB_TOKEN
 
+config SMARTCARD_DEBUG
+  bool "Activate debuggging for smartcard interaction"
+  default n
+  ---help---
+  Activate various debugging for smartcard interaction.
+  This option activate APDU/TPDU printing on serial console.
+  This option is efficient only if KERNEL_NOSERIAL is deactivated.
