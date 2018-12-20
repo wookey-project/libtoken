@@ -135,8 +135,8 @@ err:
 	return -1;
 }
 
-int auth_token_unlock_ops_exec(token_channel *channel, token_unlock_operations *ops, uint32_t num_ops, cb_token_callbacks *callbacks){
-	if(token_unlock_ops_exec(channel, auth_applet_AID, sizeof(auth_applet_AID), keybag_auth, sizeof(keybag_auth)/sizeof(databag), PLATFORM_PBKDF2_ITERATIONS, USED_SIGNATURE_CURVE, ops, num_ops, callbacks, NULL, NULL)){
+int auth_token_unlock_ops_exec(token_channel *channel, token_unlock_operations *ops, uint32_t num_ops, cb_token_callbacks *callbacks, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
+	if(token_unlock_ops_exec(channel, auth_applet_AID, sizeof(auth_applet_AID), keybag_auth, sizeof(keybag_auth)/sizeof(databag), PLATFORM_PBKDF2_ITERATIONS, USED_SIGNATURE_CURVE, ops, num_ops, callbacks, NULL, NULL, saved_decrypted_keybag, saved_decrypted_keybag_num)){
 		goto err;
 	}
 
@@ -148,7 +148,7 @@ err:
 /* We provide two callbacks: one to ask for the PET pin, the other to 
  * ask for the user PIN while showing the PET name to get confirmation.
  */
-int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, unsigned char *AES_CBC_ESSIV_key, unsigned int AES_CBC_ESSIV_key_len, unsigned char *AES_CBC_ESSIV_h_key, unsigned int AES_CBC_ESSIV_h_key_len){
+int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, unsigned char *AES_CBC_ESSIV_key, unsigned int AES_CBC_ESSIV_key_len, unsigned char *AES_CBC_ESSIV_h_key, unsigned int AES_CBC_ESSIV_h_key_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
 	/* Sanity checks */
 	if(channel == NULL){
 		goto err;
@@ -167,7 +167,7 @@ int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, 
 	external_request_pin = callbacks->request_pin;
 	local_callbacks.request_pin = local_request_pin;
 	token_unlock_operations ops[] = { TOKEN_UNLOCK_INIT_TOKEN, TOKEN_UNLOCK_ASK_PET_PIN, TOKEN_UNLOCK_ESTABLISH_SECURE_CHANNEL, TOKEN_UNLOCK_PRESENT_PET_PIN, TOKEN_UNLOCK_CONFIRM_PET_NAME, TOKEN_UNLOCK_PRESENT_USER_PIN };
-	if(auth_token_unlock_ops_exec(channel, ops, sizeof(ops)/sizeof(token_unlock_operations), &local_callbacks)){
+	if(auth_token_unlock_ops_exec(channel, ops, sizeof(ops)/sizeof(token_unlock_operations), &local_callbacks, saved_decrypted_keybag, saved_decrypted_keybag_num)){
 		goto err;
 	}
 	/*************** Get the CBC-ESSIV key and its hash */

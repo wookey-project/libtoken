@@ -1088,6 +1088,7 @@ int token_secure_channel_init(token_channel *channel, const unsigned char *decry
 	if(token_negotiate_secure_channel(channel, decrypted_platform_priv_key_data, decrypted_platform_priv_key_data_len, decrypted_platform_pub_key_data, decrypted_platform_pub_key_data_len, decrypted_token_pub_key_data, decrypted_token_pub_key_data_len, curve_type, remaining_tries)){
 		goto err;
 	}
+	channel->curve = curve_type;
 	return 0;
 err:
 	return -1;
@@ -1128,6 +1129,7 @@ void token_zeroize_secure_channel(token_channel *channel){
 	channel->pbkdf2_iterations = 0;
 	channel->platform_salt_len = 0;
         memset(channel->platform_salt, 0, sizeof(channel->platform_salt));
+	channel->curve = UNKNOWN_CURVE;
 
 	return;
 }
@@ -1178,7 +1180,7 @@ err:
 /*****************************************************************************/
 /* This function helps to interact with the token regarding its security related operations.
  */
-int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *sig_pub_key, unsigned int *sig_pub_key_len){
+int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *sig_pub_key, unsigned int *sig_pub_key_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
 	unsigned int i;
         char pet_pin[16] = { 0 };
        	char user_pin[16] = { 0 };
@@ -1276,6 +1278,21 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 					memcpy(sig_pub_key, decrypted_sig_pub_key_data, decrypted_keybag[3].size);
 					*sig_pub_key_len = decrypted_keybag[3].size;
 				}
+				/* Are asked to save the decrypted keybag for future usage? */
+				if(saved_decrypted_keybag != NULL){
+					if(saved_decrypted_keybag_num > keybag_num){
+						goto err;
+					}
+					for(j = 0; j < saved_decrypted_keybag_num; j++){
+						if(saved_decrypted_keybag[j].size < decrypted_keybag[j].size){
+							goto err;
+						}
+						memset(saved_decrypted_keybag[j].data, 0, saved_decrypted_keybag[j].size);
+						memcpy(saved_decrypted_keybag[j].data, decrypted_keybag[j].data, decrypted_keybag[j].size);
+						saved_decrypted_keybag[j].size =  decrypted_keybag[j].size;
+					}
+				}
+
 #ifdef MEASURE_TOKEN_PERF
       				sys_get_systick(&end_decrypt_keys, PREC_MILLI);
 			        printf("[Token] Keys decryption is OK! Time taken = %lld milliseconds\n", (end_decrypt_keys - start_decrypt_keys));

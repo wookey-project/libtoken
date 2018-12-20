@@ -35,6 +35,8 @@ typedef struct {
 	uint8_t platform_salt[32];
 	/* Platform salt length */
 	uint32_t platform_salt_len;
+	/* Used curve */
+	ec_curve_type curve;
 } token_channel;
 
 typedef enum {
@@ -177,6 +179,6 @@ int token_user_pin_lock(token_channel *channel);
 
 int token_full_lock(token_channel *channel);
 
-int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *decrypted_sig_pub_key_data, unsigned int *decrypted_sig_pub_key_data_len);
+int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *sig_pub_key, unsigned int *sig_pub_key_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num);
 
 #endif /* __SMARTCARD_TOKEN_H__ */
