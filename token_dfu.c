@@ -53,7 +53,7 @@ err:
 }
 
 /* Ask the DFU token to derive a session key for a firmware chunk */
-int dfu_token_derive_key(token_channel *channel, unsigned char *derived_key, uint32_t derived_key_len){
+int dfu_token_derive_key(token_channel *channel, unsigned char *derived_key, uint32_t derived_key_len, uint16_t num_chunk){
         SC_APDU_cmd apdu;
         SC_APDU_resp resp;
 
@@ -65,7 +65,9 @@ int dfu_token_derive_key(token_channel *channel, unsigned char *derived_key, uin
 		goto err;
 	}
 	
-        apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = DERIVED_KEY_SIZE; apdu.send_le = 1;
+        apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 2; apdu.le = DERIVED_KEY_SIZE; apdu.send_le = 1;
+	apdu.data[0] = (num_chunk >> 8) & 0xff;
+	apdu.data[1] = num_chunk & 0xff;
         if(token_send_receive(channel, &apdu, &resp)){
                 goto err;
         }
