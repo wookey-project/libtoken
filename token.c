@@ -327,8 +327,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	printf("[Token] ECDSA SIGN = %lld milliseconds\n", (end - start));
 #endif
 
-    /* FIXME: should be replaced by a upper layer specific requested sleep */
-    sys_sleep(1000, SLEEP_MODE_DEEP);
+	if(channel->error_recovery_sleep){
+		sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
+	}
 	/* The instruction to perform an ECDH is TOKEN_INS_SECURE_CHANNEL_INIT: the reader sends its random scalar 
 	 * and receives the card random scalar.
 	 */
@@ -640,10 +641,15 @@ err:
  * in case of possible errors before giving up ...
  */
 #define TOKEN_MAX_SEND_APDU_TRIES 20
-static int SC_send_APDU_with_errors(SC_APDU_cmd *apdu, SC_APDU_resp *resp, SC_Card *card){
+static int SC_send_APDU_with_errors(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *resp, SC_Card *card){
 	unsigned int num_tries;
 	int ret;
 	num_tries = 0;
+	if(channel == NULL){
+		ret = -1;
+		goto err;
+	}
+
 	while(1){
 		ret = SC_send_APDU(apdu, resp, card);
 		num_tries++;
@@ -651,8 +657,12 @@ static int SC_send_APDU_with_errors(SC_APDU_cmd *apdu, SC_APDU_resp *resp, SC_Ca
 			return 0;
 		}
 #if SMARTCARD_DEBUG
-        printf("...retrying!\n");
+        	printf("...retrying!\n");
 #endif
+		if(channel->error_recovery_sleep){
+			sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
+		}
+
 		if(ret && (num_tries >= TOKEN_MAX_SEND_APDU_TRIES)){
 			goto err;
 		}
@@ -709,7 +719,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
             goto err;
         }
         /* Send the encrypted APDU and receive the encrypted response */
-        if(SC_send_APDU_with_errors(apdu, resp, &(channel->card))){
+        if(SC_send_APDU_with_errors(channel, apdu, resp, &(channel->card))){
             goto err;
         }
         /* Decrypt the response in place and check its integrity */
@@ -721,7 +731,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
         /* In non secure channel mode, we do not encrypt: send the raw
          * APDU and receive the raw response.
          */
-        if(SC_send_APDU_with_errors(apdu, resp, &(channel->card))){
+        if(SC_send_APDU_with_errors(channel, apdu, resp, &(channel->card))){
             goto err;
         }
     }
@@ -1113,6 +1123,7 @@ void token_zeroize_channel(token_channel *channel){
 
         channel->channel_initialized = 0;
 	memset((void*)&(channel->card), 0, sizeof(channel->card));
+	channel->error_recovery_sleep = 0;
 
 	token_zeroize_secure_channel(channel);
 

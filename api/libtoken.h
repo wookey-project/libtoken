@@ -37,6 +37,8 @@ typedef struct {
 	uint32_t platform_salt_len;
 	/* Used curve */
 	ec_curve_type curve;
+	/* Sleeping time to be used to recover from errors. Zero means no sleep. */
+	uint32_t error_recovery_sleep;
 } token_channel;
 
 typedef enum {
