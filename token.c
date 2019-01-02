@@ -3,7 +3,7 @@
 #include "api/libtoken.h"
 #include "api/syscall.h"
 #define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
-#define MEASURE_TOKEN_PERF
+//#define MEASURE_TOKEN_PERF
 
 #include "api/print.h"
 
@@ -327,6 +327,8 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	printf("[Token] ECDSA SIGN = %lld milliseconds\n", (end - start));
 #endif
 
+    /* FIXME: should be replaced by a upper layer specific requested sleep */
+    sys_sleep(1000, SLEEP_MODE_DEEP);
 	/* The instruction to perform an ECDH is TOKEN_INS_SECURE_CHANNEL_INIT: the reader sends its random scalar 
 	 * and receives the card random scalar.
 	 */
@@ -648,6 +650,9 @@ static int SC_send_APDU_with_errors(SC_APDU_cmd *apdu, SC_APDU_resp *resp, SC_Ca
 		if(!ret){
 			return 0;
 		}
+#if SMARTCARD_DEBUG
+        printf("...retrying!\n");
+#endif
 		if(ret && (num_tries >= TOKEN_MAX_SEND_APDU_TRIES)){
 			goto err;
 		}
