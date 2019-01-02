@@ -1,6 +1,6 @@
 config USR_LIB_TOKEN
   select USR_LIB_SMARTCARD
-  bool  "Wookey javacard tokens communication protocol API"
+  bool  "userspace Wookey javacard tokens API"
   default y
   ---help---
   Support for communication with the Wookey project applets,
@@ -9,6 +9,10 @@ config USR_LIB_TOKEN_CFLAGS
   string
   default " -I../../libs/token/api " if USR_LIB_TOKEN
 
+if USR_LIB_TOKEN
+
+menu "libtoken specific options"
+
 config SMARTCARD_DEBUG
   bool "Activate debuggging for smartcard interaction"
   default n
@@ -16,3 +20,7 @@ config SMARTCARD_DEBUG
   Activate various debugging for smartcard interaction.
   This option activate APDU/TPDU printing on serial console.
   This option is efficient only if KERNEL_NOSERIAL is deactivated.
+
+endmenu
+
+endif
