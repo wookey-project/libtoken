@@ -18,9 +18,6 @@
 #define log_printf(...)
 #endif
 
-/*FIXME: not clean*/
-extern uint8_t id_pin;
-
 static const unsigned char auth_applet_AID[] = { 0x45, 0x75, 0x74, 0x77, 0x74, 0x75, 0x36, 0x41, 0x70, 0x70 };
 
 /* Get key and its derivative */
@@ -86,20 +83,17 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	sha256_final(&sha256_ctx, digest);
 
 	/* Decrypt our response buffer */
-	/* [RB] FIXME: this should be a AES_DECRYPT here instread of AES_ENCRYPT, but for now we only have 
-	 * a masked encryption. This MUST migrated as soon as a masked decryption is available.
-	 */
 #if defined(__arm__)
 	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
-	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
 	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
 #endif
 		goto err;
 	}
 	/* Decrypt */
-	if(aes(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
+	if(aes_exec(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
 		goto err;
 	}
 

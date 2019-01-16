@@ -31,7 +31,6 @@
 
 int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *resp);
 
-/* [RB] FIXME: this is a hell of number of arguments ... We should clearly find a way to reduce this! */
 int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t pet_pin_len, const databag *keybag, uint32_t keybag_num, databag *decrypted_keybag, uint32_t decrypted_keybag_num, uint32_t pbkdf2_iterations)
 {
     uint8_t pbkdf[SHA512_DIGEST_SIZE];
@@ -77,7 +76,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     /* First of all, we derive our decryption and HMAC keys
      * from the PET PIN using PBKDF2.
      */
+#if SMARTCARD_DEBUG
     printf("sending hmac_pbkdf2\n");
+#endif
     pbkdf_len = sizeof(pbkdf);
     if(hmac_pbkdf2(SHA512, (unsigned char*)pet_pin, pet_pin_len, platform_salt, platform_salt_len, pbkdf2_iterations, SHA512_DIGEST_SIZE, pbkdf, &pbkdf_len))
     {
@@ -93,7 +94,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_LOCAL_PET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; 
     apdu.lc = SHA512_DIGEST_SIZE; apdu.le = SHA512_DIGEST_SIZE; apdu.send_le = 1;
     memcpy(apdu.data, pbkdf, pbkdf_len);
+#if SMARTCARD_DEBUG
     printf("sending to token\n");
+#endif
     if(token_send_receive(channel, &apdu, &resp)) {
         printf("token send received fail\n");
         goto err;
@@ -120,7 +123,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
         printf("hmac init error\n");
         goto err;
     }
+#if SMARTCARD_DEBUG
     printf("hmac init OK\n");
+#endif
     hmac_update(&hmac_ctx, platform_iv, platform_iv_len);
     hmac_update(&hmac_ctx, platform_salt, platform_salt_len);
     for(i = 0; i < (keybag_num - 3); i++){
@@ -130,7 +135,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     {
         goto err;
     }
+#if SMARTCARD_DEBUG
     printf("hmac final OK\n");
+#endif
     /* Check the HMAC tag and return an error if there is an issue */
     if((hmac_len != SHA256_DIGEST_SIZE) || (platform_hmac_tag_len != SHA256_DIGEST_SIZE)){
         goto err;
@@ -138,11 +145,12 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     if(!are_equal(hmac, platform_hmac_tag, hmac_len)){
         goto err;
     }
+#if SMARTCARD_DEBUG
     printf("hmac equal OK\n");
+#endif
     /* HMAC is OK, we can decrypt our data */
 #if defined(__arm__)
     /* Use the protected masked AES ofr the platform keys decryption */
-    /* [RB] FIXME: use a 256-bit AES when the masked implementation is ready to handle it */
     if(aes_init(&aes_context, token_key, AES128, platform_iv, CTR, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
         /* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
@@ -150,7 +158,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
 #endif
         goto err;
     }
+#if SMARTCARD_DEBUG
     printf("aes init OK\n");
+#endif
     /* Decrypt all our data encapsulated in the keybag */
     for(i = 0; i < (keybag_num - 3); i++){
         if(keybag[i+3].size < decrypted_keybag[i].size){
@@ -158,12 +168,13 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
             goto err;
         }
         decrypted_keybag[i].size = keybag[i+3].size;
-        if(aes(&aes_context, keybag[i+3].data, decrypted_keybag[i].data, keybag[i+3].size, -1, -1)){
+        if(aes_exec(&aes_context, keybag[i+3].data, decrypted_keybag[i].data, keybag[i+3].size, -1, -1)){
             goto err;
         }
     }
+#if SMARTCARD_DEBUG
     printf("aes OK\n");
-
+#endif
     /* Erase the token key */
     memset(token_key, 0, sizeof(token_key));
 
@@ -506,7 +517,7 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 #endif
 			goto err;
 		}
-		if(aes(&aes_context, apdu->data, apdu->data, apdu->lc, -1, -1)){
+		if(aes_exec(&aes_context, apdu->data, apdu->data, apdu->lc, -1, -1)){
 			goto err;
 		}
 		/* Increment the IV by as many blocks as necessary */
@@ -622,7 +633,7 @@ CHECK_INTEGRITY_AGAIN:
 #endif
 			goto err;
 		}
-		if(aes(&aes_context, resp->data, resp->data, resp->le, -1, -1)){
+		if(aes_exec(&aes_context, resp->data, resp->data, resp->le, -1, -1)){
 			goto err;
 		}
 		/* Increment the IV by as many blocks as necessary */
