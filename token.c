@@ -55,7 +55,7 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
         printf("one of pet_pin, keyback, decrypted_keybag is null\n");
         goto err;
     }
-    /* Sanity checks on lengths 
+    /* Sanity checks on lengths
      * A Keybag contains at least an IV, a salt and a HMAC tag
      */
     if(keybag_num < 3) {
@@ -91,7 +91,7 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
         printf("channel == NULL\n");
         goto err;
     }
-    apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_LOCAL_PET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; 
+    apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_LOCAL_PET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00;
     apdu.lc = SHA512_DIGEST_SIZE; apdu.le = SHA512_DIGEST_SIZE; apdu.send_le = 1;
     memcpy(apdu.data, pbkdf, pbkdf_len);
 #if SMARTCARD_DEBUG
@@ -297,7 +297,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	/* Clear blinding scalar */
 	nn_uninit(&scalar_b);
 #else
-        prj_pt_mul_monty(&Q, &d, &(curve_params.ec_gen));	
+        prj_pt_mul_monty(&Q, &d, &(curve_params.ec_gen));
 #endif
 
 #ifdef MEASURE_TOKEN_PERF
@@ -341,10 +341,10 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	if(channel->error_recovery_sleep){
 		sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
 	}
-	/* The instruction to perform an ECDH is TOKEN_INS_SECURE_CHANNEL_INIT: the reader sends its random scalar 
+	/* The instruction to perform an ECDH is TOKEN_INS_SECURE_CHANNEL_INIT: the reader sends its random scalar
 	 * and receives the card random scalar.
 	 */
-	apdu.cla = 0x00; apdu.ins = TOKEN_INS_SECURE_CHANNEL_INIT; apdu.p1 = 0x00; apdu.p2 = 0x00; 
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_SECURE_CHANNEL_INIT; apdu.p1 = 0x00; apdu.p2 = 0x00;
 	apdu.le = apdu.lc; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
 		goto err;
@@ -387,7 +387,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         sys_get_systick(&end, PREC_MILLI);
 	printf("[Token] ECDSA VERIFY = %lld milliseconds\n", (end - start));
 #endif
-	
+
 	/* Signature is OK, now extract the point from the APDU */
 	if(prj_pt_import_from_buf(&Q, resp.data, 3 * BYTECEIL(curve_params.ec_fp.p_bitlen), &(curve_params.ec_curve))){
 		/* NB: prj_pt_import_from_buf checks if the point is indeed on the
@@ -437,18 +437,18 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	/* AES Key = SHA-256("AES_SESSION_KEY" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (uint8_t*)"AES_SESSION_KEY", sizeof("AES_SESSION_KEY")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen)); 
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->AES_key, digest, 16);
 	/* HMAC Key = SHA-256("HMAC_SESSION_KEY" | shared_secret) (256 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (uint8_t*)"HMAC_SESSION_KEY", sizeof("HMAC_SESSION_KEY")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen)); 
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, channel->HMAC_key);
 	/* IV = SHA-256("SESSION_IV" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (uint8_t*)"SESSION_IV", sizeof("SESSION_IV")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen)); 
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->IV, digest, 16);
 	memcpy(channel->first_IV, channel->IV, 16);
@@ -493,7 +493,7 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 		/* Not enough room for our HMAC */
 		goto err;
 	}
-	
+
 	/* Compute the integrity on the full encrypted data + CLA/INS/P1/P2, lc and le on 1 byte since we deal only with short APDUs */
 	if(hmac_init(&hmac_ctx, channel->HMAC_key, sizeof(channel->HMAC_key), SHA256)){
 		goto err;
@@ -530,7 +530,7 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 	}
 	/* Always increment our anti-replay counter manually at least once fot the next data batch to send/receive */
 	inc_iv(channel->IV);
-	
+
 	/* When encrypting an APDU, we always expect a response with at least 32 bytes of HMAC.
 	 * In order to avoid any issue, we ask for a Le = 0 meaning that we expect a maximum amount of
 	 * 256 bytes.
@@ -581,7 +581,7 @@ static int token_apdu_resp_decrypt(token_channel *channel, SC_APDU_resp *resp){
 		goto err;
 	}
 	/* Copy the received HMAC */
-	memcpy(hmac_recv, &(resp->data[resp->le - sizeof(hmac_recv)]), sizeof(hmac_recv)); 
+	memcpy(hmac_recv, &(resp->data[resp->le - sizeof(hmac_recv)]), sizeof(hmac_recv));
 	resp->le -= sizeof(hmac_recv);
 CHECK_INTEGRITY_AGAIN:
 	/* Check the integrity */
@@ -647,7 +647,7 @@ err:
 	return -1;
 }
 
-/* 
+/*
  * Try to send an APDU on the physical line multiple times
  * in case of possible errors before giving up ...
  */
@@ -816,7 +816,7 @@ int token_select_applet(token_channel *channel, const unsigned char *aid, unsign
 
     /* Check return status */
     if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
-        goto err; 
+        goto err;
     }
 
     return 0;
@@ -1121,9 +1121,42 @@ err:
 }
 
 /**********************************************************************/
-int token_early_init(void){
-    return SC_fsm_early_init();
+
+static volatile bool map_voluntary;
+
+int token_early_init(token_map_mode_t token_map)
+{
+    switch (token_map) {
+        case TOKEN_MAP_AUTO:
+            map_voluntary = false;
+            return SC_fsm_early_init(SC_MAP_AUTO);
+        case TOKEN_MAP_VOLUNTARY:
+            map_voluntary = true;
+            return SC_fsm_early_init(SC_MAP_VOLUNTARY);
+        default:
+            printf("invalid map mode\n");
+            break;
+    }
+    return 1;
 }
+
+int token_map(void)
+{
+    if (map_voluntary) {
+        return SC_fsm_map();
+    }
+    return 0;
+}
+
+int token_unmap(void)
+{
+    if (map_voluntary) {
+        return SC_fsm_unmap();
+    }
+    return 0;
+}
+
+
 
 /* Zeroize the whole channel (physical related stuff and secure channel suff) */
 void token_zeroize_channel(token_channel *channel){
@@ -1223,7 +1256,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 	if(op == NULL){
 		goto err;
 	}
-	
+
 	for(i = 0; i < num_ops; i++){
 		switch(op[i]){
 			/****************************************************************/
@@ -1253,7 +1286,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				if((keybag == NULL) || (keybag_num < 6)){
 					goto err;
 				}
-				
+
 			        /* Platform keys decrypted buffers */
 			        unsigned char decrypted_token_pub_key_data[EC_STRUCTURED_PUB_KEY_MAX_EXPORT_SIZE] = { 0 };
 			        unsigned char decrypted_platform_priv_key_data[EC_STRUCTURED_PRIV_KEY_MAX_EXPORT_SIZE] = { 0 };
@@ -1345,7 +1378,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 #else
 			        printf("[Token] Secure channel negotiation is OK!\n");
 #endif
- 
+
 				break;
 			}
 			/****************************************************************/
@@ -1377,14 +1410,14 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        	pet_pin_len = sizeof(pet_pin);
 				        if(callbacks->request_pin(pet_pin, &pet_pin_len, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE)){
 					        printf("[Pet Pin] Failed to ask for pet pin!\n");
-						callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);	
+						callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
 		        	        	goto err;
         				}
 				}
 				/* Send the PIN to token */
 				if(token_send_pin(channel, pet_pin, pet_pin_len, &pin_ok, &remaining_tries, TOKEN_PET_PIN)){
 					printf("[Token] Error sending PET pin\n");
-					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);	
+					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
 					goto err;
 				}
 				if(!pin_ok){
@@ -1410,7 +1443,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        user_pin_len = sizeof(user_pin);
 			        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE)){
 				        printf("[User Pin] Failed to ask for pet pin!\n");
-					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, 0);	
+					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, 0);
 		                	goto err;
         			}
 				got_user_pin = 1;
@@ -1432,14 +1465,14 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        	user_pin_len = sizeof(user_pin);
 				        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE)){
 					        printf("[User Pin] Failed to ask for user pin!\n");
-						callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, 0);	
+						callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, 0);
 		        	        	goto err;
         				}
 				}
 				/* Send the PIN to token */
 				if(token_send_pin(channel, user_pin, user_pin_len, &pin_ok, &remaining_tries, TOKEN_USER_PIN)){
 					printf("[Token] Error sending user pin\n");
-					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);	
+					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
 					goto err;
 				}
 				if(!pin_ok){
@@ -1536,7 +1569,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				goto err;
 		}
 	}
-	
+
 	/* Erase our sensitive stuff */
 	memset(pet_pin, 0, pet_pin_len);
 	memset(user_pin, 0, user_pin_len);

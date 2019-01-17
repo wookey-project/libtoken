@@ -3,7 +3,7 @@
 
 #include "libsmartcard.h"
 
-/* Include libecc headers for the crypto part 
+/* Include libecc headers for the crypto part
  * (asymmetric ECC and hash functions).
  */
 #include "libsig.h"
@@ -119,6 +119,11 @@ typedef enum {
 	TOKEN_UNLOCK_CHANGE_PET_NAME          = 9,
 } token_unlock_operations;
 
+typedef enum {
+    TOKEN_MAP_AUTO,
+    TOKEN_MAP_VOLUNTARY
+} token_map_mode_t;
+
 
 /* We define here the type of AES we use to protect the channel to
  * communicate with the token.
@@ -148,7 +153,7 @@ static inline void add_iv(uint8_t IV[16], unsigned int inc){
     return;
 }
 
-int token_early_init(void);
+int token_early_init(token_map_mode_t token_map);
 
 /* High level functions to communicate with the token */
 int token_init(token_channel *channel);
@@ -158,8 +163,6 @@ void token_zeroize_channel(token_channel *channel);
 void token_zeroize_secure_channel(token_channel *channel);
 
 void token_zeroize_databag(databag *databag, unsigned int databag_size);
-
-int token_early_init();
 
 int token_select_applet(token_channel *channel, const unsigned char *aid, unsigned int aid_len);
 
@@ -182,5 +185,9 @@ int token_user_pin_lock(token_channel *channel);
 int token_full_lock(token_channel *channel);
 
 int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *sig_pub_key, unsigned int *sig_pub_key_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num);
+
+int token_map(void);
+
+int token_unmap(void);
 
 #endif /* __SMARTCARD_TOKEN_H__ */
