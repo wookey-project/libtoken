@@ -39,6 +39,8 @@ typedef struct {
 	ec_curve_type curve;
 	/* Sleeping time to be used to recover from errors. Zero means no sleep. */
 	uint32_t error_recovery_sleep;
+	/* Number of retries in case of error on the line */
+	uint32_t error_recovery_max_send_retries;
 } token_channel;
 
 typedef enum {

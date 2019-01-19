@@ -193,6 +193,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
 err:
     /* Erase the token key */
     memset(token_key, 0, sizeof(token_key));
+#if SMARTCARD_DEBUG
+    printf("Error: decrypt_platform_keys\n");
+#endif
     return -1;
 }
 
@@ -467,6 +470,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 
 	return 0;
 err:
+#if SMARTCARD_DEBUG
+        printf("Error: token_negotiate_secure_channel\n");
+#endif
 	return -1;
 }
 
@@ -554,6 +560,9 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 
 	return 0;
 err:
+#if SMARTCARD_DEBUG
+        printf("Error: token_apdu_cmd_encrypt\n");
+#endif
 	return -1;
 }
 
@@ -644,6 +653,9 @@ CHECK_INTEGRITY_AGAIN:
 
 	return 0;
 err:
+#if SMARTCARD_DEBUG
+        printf("Error: token_apdu_cmd_encrypt\n");
+#endif
 	return -1;
 }
 
@@ -651,7 +663,6 @@ err:
  * Try to send an APDU on the physical line multiple times
  * in case of possible errors before giving up ...
  */
-#define TOKEN_MAX_SEND_APDU_TRIES 20
 static int SC_send_APDU_with_errors(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *resp, SC_Card *card){
 	unsigned int num_tries;
 	int ret;
@@ -674,7 +685,7 @@ static int SC_send_APDU_with_errors(token_channel *channel, SC_APDU_cmd *apdu, S
 			sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
 		}
 
-		if(ret && (num_tries >= TOKEN_MAX_SEND_APDU_TRIES)){
+		if(ret && (num_tries >= channel->error_recovery_max_send_retries)){
 			goto err;
 		}
 		if(!SC_is_smartcard_inserted(card)){
@@ -1168,6 +1179,7 @@ void token_zeroize_channel(token_channel *channel){
         channel->channel_initialized = 0;
 	memset((void*)&(channel->card), 0, sizeof(channel->card));
 	channel->error_recovery_sleep = 0;
+	channel->error_recovery_max_send_retries = 0;
 
 	token_zeroize_secure_channel(channel);
 
@@ -1216,6 +1228,8 @@ int token_init(token_channel *channel){
 
 	channel->channel_initialized = 0;
 	channel->secure_channel = 0;
+	/* By default, error retries (in case of noise on the line) are set to 20 */
+	channel->error_recovery_max_send_retries = 20;
 
         /* Initialize the card communication. First, try to negotiate PSS,
          * and do it without negotiation if it fails.
