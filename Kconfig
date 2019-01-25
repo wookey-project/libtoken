@@ -5,9 +5,6 @@ config USR_LIB_TOKEN
   ---help---
   Support for communication with the Wookey project applets,
   including AUTH and DFU tokens.
-config USR_LIB_TOKEN_CFLAGS
-  string
-  default " -I../../libs/token/api " if USR_LIB_TOKEN
 
 if USR_LIB_TOKEN
 
