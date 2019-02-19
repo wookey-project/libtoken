@@ -629,6 +629,24 @@ CHECK_INTEGRITY_AGAIN:
 		goto CHECK_INTEGRITY_AGAIN;
 	}
 
+#if __GNUG__
+# pragma GCC push_options
+# pragma GCC optimize("O0")
+#endif
+#if __clang__
+# pragma clang optimize off
+#endif
+	/* Sanity check against faults */
+	if(!are_equal(hmac, hmac_recv, sizeof(hmac))){
+		goto err;
+	}
+#if __clang__
+# pragma clang optimize on
+#endif
+#if __GNUG__
+# pragma GCC pop_options
+#endif
+
 	/* Decrypt our data in place if there are some */
 	if(resp->le != 0){
 		aes_context aes_context;
