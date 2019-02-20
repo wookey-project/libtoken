@@ -629,7 +629,7 @@ CHECK_INTEGRITY_AGAIN:
 		goto CHECK_INTEGRITY_AGAIN;
 	}
 
-#if __GNUG__
+#if __GNUC__
 # pragma GCC push_options
 # pragma GCC optimize("O0")
 #endif
@@ -643,7 +643,7 @@ CHECK_INTEGRITY_AGAIN:
 #if __clang__
 # pragma clang optimize on
 #endif
-#if __GNUG__
+#if __GNUC__
 # pragma GCC pop_options
 #endif
 
