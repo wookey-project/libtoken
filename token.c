@@ -566,6 +566,35 @@ err:
 	return -1;
 }
 
+#if __GNUC__
+# pragma GCC push_options
+# pragma GCC optimize("O0")
+#endif
+#if __clang__
+# pragma clang optimize off
+#endif
+secbool check_hmac_again(const uint8_t *hmac, const uint8_t *hmac_recv, uint32_t size){
+	if((hmac == NULL) || (hmac_recv == NULL)){
+		goto err;
+	}
+	if(!are_equal(hmac, hmac_recv, size)){
+		goto err;
+	}
+	if(!are_equal(hmac_recv, hmac, size)){
+		goto err;
+	}
+
+	return sectrue;
+err:
+	return secfalse;
+}
+#if __clang__
+# pragma clang optimize on
+#endif
+#if __GNUC__
+# pragma GCC pop_options
+#endif
+
 static int token_apdu_resp_decrypt(token_channel *channel, SC_APDU_resp *resp){
 	hmac_context hmac_ctx;
 	uint8_t hmac[SHA256_DIGEST_SIZE];
@@ -629,23 +658,11 @@ CHECK_INTEGRITY_AGAIN:
 		goto CHECK_INTEGRITY_AGAIN;
 	}
 
-#if __GNUC__
-# pragma GCC push_options
-# pragma GCC optimize("O0")
-#endif
-#if __clang__
-# pragma clang optimize off
-#endif
+	
 	/* Sanity check against faults */
-	if(!are_equal(hmac, hmac_recv, sizeof(hmac))){
+	if(check_hmac_again(hmac, hmac_recv, sizeof(hmac)) != sectrue){
 		goto err;
 	}
-#if __clang__
-# pragma clang optimize on
-#endif
-#if __GNUC__
-# pragma GCC pop_options
-#endif
 
 	/* Decrypt our data in place if there are some */
 	if(resp->le != 0){
@@ -676,6 +693,7 @@ err:
 #endif
 	return -1;
 }
+
 
 /*
  * Try to send an APDU on the physical line multiple times
