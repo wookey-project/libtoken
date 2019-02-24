@@ -3,7 +3,7 @@
 #include "api/libtoken.h"
 #include "api/syscall.h"
 #define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
-//#define MEASURE_TOKEN_PERF
+#define MEASURE_TOKEN_PERF
 
 #include "api/print.h"
 
@@ -566,12 +566,13 @@ err:
 	return -1;
 }
 
-#if __GNUC__
+#ifdef __GNUC__
+#ifdef __clang__
+# pragma clang optimize off
+#else
 # pragma GCC push_options
 # pragma GCC optimize("O0")
 #endif
-#if __clang__
-# pragma clang optimize off
 #endif
 secbool check_hmac_again(const uint8_t *hmac, const uint8_t *hmac_recv, uint32_t size){
 	if((hmac == NULL) || (hmac_recv == NULL)){
@@ -588,11 +589,12 @@ secbool check_hmac_again(const uint8_t *hmac, const uint8_t *hmac_recv, uint32_t
 err:
 	return secfalse;
 }
-#if __clang__
+#ifdef __GNUC__
+#ifdef __clang__
 # pragma clang optimize on
-#endif
-#if __GNUC__
+#else
 # pragma GCC pop_options
+#endif
 #endif
 
 static int token_apdu_resp_decrypt(token_channel *channel, SC_APDU_resp *resp){
