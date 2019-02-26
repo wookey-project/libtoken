@@ -296,7 +296,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         if (nn_get_random_mod(&scalar_b, &(curve_params.ec_gen_order))) {
                 goto err;
         }
-        prj_pt_mul_monty_blind(&Q, &d, &(curve_params.ec_gen), &scalar_b, &(curve_params.ec_gen_order));
+        if(prj_pt_mul_monty_blind(&Q, &d, &(curve_params.ec_gen), &scalar_b, &(curve_params.ec_gen_order))){
+		goto err;
+	}
 	/* Clear blinding scalar */
 	nn_uninit(&scalar_b);
 #else
@@ -412,7 +414,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         if (nn_get_random_mod(&scalar_b, &(curve_params.ec_gen_order))) {
                 goto err;
         }
-        prj_pt_mul_monty_blind(&Q, &d, &Q, &scalar_b, &(curve_params.ec_gen_order));
+        if(prj_pt_mul_monty_blind(&Q, &d, &Q, &scalar_b, &(curve_params.ec_gen_order))){
+		goto err;
+	}
 	/* Clear blinding scalar */
 	nn_uninit(&scalar_b);
 #else
@@ -1604,10 +1608,6 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        pet_name_len = sizeof(pet_name);
 			        if(callbacks->request_pet_name(pet_name, &pet_name_len)){
 				        printf("[Pet Name] Failed to ask for the NEW pet name!\n");
-					if(callbacks->request_pet_name_confirmation(pet_name, pet_name_len)){
-						printf("[Token] Failed to confirm the PET name by the user\n");
-						goto err;
-					}
 		                	goto err;
         			}
 				/* Modify the pet name */
