@@ -3,7 +3,7 @@
 #include "api/libtoken.h"
 #include "api/syscall.h"
 #define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
-#define MEASURE_TOKEN_PERF
+/* #define MEASURE_TOKEN_PERF */
 
 #include "api/print.h"
 
@@ -664,7 +664,7 @@ CHECK_INTEGRITY_AGAIN:
 		goto CHECK_INTEGRITY_AGAIN;
 	}
 
-	
+
 	/* Sanity check against faults */
 	if(check_hmac_again(hmac, hmac_recv, sizeof(hmac)) != sectrue){
 		goto err;
