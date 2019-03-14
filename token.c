@@ -6,6 +6,7 @@
 /* #define MEASURE_TOKEN_PERF */
 
 #include "api/print.h"
+#include "api/string.h"
 
 /****** Token operations **************/
 /* [RB] FIXME: the layer handling the encryption and the integrity should

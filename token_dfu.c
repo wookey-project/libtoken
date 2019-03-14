@@ -4,6 +4,7 @@
 #define MEASURE_TOKEN_PERF
 
 #include "api/print.h"
+#include "api/string.h"
 
 /* Include our encrypted platform keys  */
 #include "DFU/encrypted_platform_dfu_keys.h"
@@ -46,7 +47,7 @@ int dfu_token_begin_decrypt_session(token_channel *channel, const unsigned char 
                 /* The smartcard responded an error */
                 goto err;
         }
-	
+
         return 0;
 err:
         return -1;
@@ -64,7 +65,7 @@ int dfu_token_derive_key(token_channel *channel, unsigned char *derived_key, uin
 	if(derived_key_len < DERIVED_KEY_SIZE){
 		goto err;
 	}
-	
+
         apdu.cla = 0x00; apdu.ins = TOKEN_INS_DERIVE_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 2; apdu.le = DERIVED_KEY_SIZE; apdu.send_le = 1;
 	apdu.data[0] = (num_chunk >> 8) & 0xff;
 	apdu.data[1] = num_chunk & 0xff;
@@ -82,7 +83,7 @@ int dfu_token_derive_key(token_channel *channel, unsigned char *derived_key, uin
 		goto err;
 	}
 	memcpy(derived_key, resp.data, DERIVED_KEY_SIZE);
-	
+
         return 0;
 err:
         return -1;
@@ -102,7 +103,7 @@ int dfu_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, u
         /* Sanity checks */
         if(channel == NULL){
                 goto err;
-        }	
+        }
 	if(callbacks == NULL){
 		goto err;
 	}
