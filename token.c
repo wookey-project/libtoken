@@ -5,7 +5,8 @@
 #define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
 /* #define MEASURE_TOKEN_PERF */
 
-#include "api/print.h"
+#include "api/stdio.h"
+#include "api/nostd.h"
 #include "api/string.h"
 
 /****** Token operations **************/
