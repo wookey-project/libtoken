@@ -1,13 +1,13 @@
 /* Inlude elements related to ISO7816 and the board */
 #include "autoconf.h"
 #include "api/libtoken.h"
-#include "api/syscall.h"
+#include "libc/syscall.h"
 #define SMARTCARD_DEBUG CONFIG_SMARTCARD_DEBUG
 /* #define MEASURE_TOKEN_PERF */
 
-#include "api/stdio.h"
-#include "api/nostd.h"
-#include "api/string.h"
+#include "libc/stdio.h"
+#include "libc/nostd.h"
+#include "libc/string.h"
 
 /****** Token operations **************/
 /* [RB] FIXME: the layer handling the encryption and the integrity should

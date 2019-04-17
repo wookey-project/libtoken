@@ -1,30 +1,37 @@
+###################################################################
+# About the library name and path
+###################################################################
+
+# library name, without extension
 LIB_NAME ?= libtoken
 
+# project root directory, relative to app dir
 PROJ_FILES = ../../
+
+# library name, with extension
 LIB_FULL_NAME = $(LIB_NAME).a
 
-VERSION = 1
-#############################
-
+# SDK helper Makefiles inclusion
 -include $(PROJ_FILES)/Makefile.conf
 -include $(PROJ_FILES)/Makefile.gen
 
 # use an app-specific build dir
 APP_BUILD_DIR = $(BUILD_DIR)/libs/$(LIB_NAME)
 
-CFLAGS += $(LIBS_CFLAGS)
-CFLAGS += -ffreestanding
-CFLAGS += -I$(PROJ_FILES)/externals/libecc/src
-CFLAGS += $(EXTERNAL_CFLAGS)
+###################################################################
+# About the compilation flags
+###################################################################
 
-CFLAGS += -I$(PROJ_FILES)/kernel/shared -I. -Iapi
-# dependency on lower iso7816 interface
-CFLAGS += $(LIBSIGN_CFLAGS)
-CFLAGS += -MMD -MP -nostdlib
-# including secret keys dir
+CFLAGS := $(LIBS_CFLAGS)
+# libtoken needs libecc
+CFLAGS += -I$(PROJ_FILES)/externals/libecc/src $(EXTERNAL_CFLAGS) $(LIBSIGN_CFLAGS)
+CFLAGS += -MMD -MP
+# libtoken needs private key access. This access should be declared voluntary in makefiles
 CFLAGS += -I$(PRIVATE_DIR)
 
-BUILD_DIR ?= $(PROJ_FILE)build
+#############################################################
+# About library sources
+#############################################################
 
 SRC_DIR = .
 SRC = $(wildcard $(SRC_DIR)/*.c)
@@ -38,6 +45,10 @@ OUT_DIRS = $(dir $(OBJ))
 TODEL_CLEAN += $(OBJ)
 # targets
 TODEL_DISTCLEAN += $(APP_BUILD_DIR)
+
+##########################################################
+# generic targets of all libraries makefiles
+##########################################################
 
 .PHONY: app doc
 
@@ -59,9 +70,6 @@ show:
 
 lib: $(APP_BUILD_DIR)/$(LIB_FULL_NAME)
 
-#############################################################
-# build targets (driver, core, SoC, Board... and local)
-# App C sources files
 $(APP_BUILD_DIR)/%.o: %.c
 	$(call if_changed,cc_o_c)
 
@@ -74,4 +82,3 @@ $(APP_BUILD_DIR):
 	$(call cmd,mkdir)
 
 -include $(DEP)
--include $(TESTSDEP)

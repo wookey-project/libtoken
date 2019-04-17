@@ -1,11 +1,11 @@
 #include "api/libtoken_dfu.h"
-#include "api/syscall.h"
+#include "libc/syscall.h"
 #define SMARTCARD_DEBUG
 #define MEASURE_TOKEN_PERF
 
-#include "api/stdio.h"
-#include "api/nostd.h"
-#include "api/string.h"
+#include "libc/stdio.h"
+#include "libc/nostd.h"
+#include "libc/string.h"
 
 /* Include our encrypted platform keys  */
 #include "DFU/encrypted_platform_dfu_keys.h"
