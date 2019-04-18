@@ -156,7 +156,7 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     if(aes_init(&aes_context, token_key, AES128, platform_iv, CTR, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
         /* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-    if(aes_init(&aes_context, token_key, AES128, platform_iv, CTR, AES_DECRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
+    if(aes_init(&aes_context, token_key, AES128, platform_iv, CTR, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
         goto err;
     }
@@ -525,7 +525,7 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_ENCRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
 		/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_ENCRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
+		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_ENCRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
 			goto err;
 		}
@@ -681,7 +681,7 @@ CHECK_INTEGRITY_AGAIN:
 		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
 		/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_DECRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
+		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
 			goto err;
 		}

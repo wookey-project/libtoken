@@ -90,7 +90,7 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
 	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_MBEDTLS, NULL, NULL, -1, -1)){
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
 		goto err;
 	}
