@@ -1,5 +1,7 @@
 config USR_LIB_TOKEN
   select USR_LIB_SMARTCARD
+  select USR_LIB_AES
+  select USR_LIB_AES_ALGO_UNMASKED
   bool  "userspace Wookey javacard tokens API"
   default y
   ---help---
