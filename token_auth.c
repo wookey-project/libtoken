@@ -76,7 +76,7 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	 * The KEY used here is a 128-bit AES key as the first half of SHA-256(first_IV || SHA-256(PIN)).
 	 */
 	sha256_init(&sha256_ctx);
-	sha256_update(&sha256_ctx, (uint8_t*)pin, pin_len);
+	sha256_update(&sha256_ctx, (const uint8_t*)pin, pin_len);
 	sha256_final(&sha256_ctx, digest);
 
 	sha256_init(&sha256_ctx);

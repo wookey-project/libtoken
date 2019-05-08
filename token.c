@@ -82,7 +82,7 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     printf("sending hmac_pbkdf2\n");
 #endif
     pbkdf_len = sizeof(pbkdf);
-    if(hmac_pbkdf2(SHA512, (unsigned char*)pet_pin, pet_pin_len, platform_salt, platform_salt_len, pbkdf2_iterations, SHA512_DIGEST_SIZE, pbkdf, &pbkdf_len))
+    if(hmac_pbkdf2(SHA512, (const unsigned char*)pet_pin, pet_pin_len, platform_salt, platform_salt_len, pbkdf2_iterations, SHA512_DIGEST_SIZE, pbkdf, &pbkdf_len))
     {
         goto err;
     }
@@ -445,18 +445,18 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 
 	/* AES Key = SHA-256("AES_SESSION_KEY" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
-	sha256_update(&sha256_ctx, (uint8_t*)"AES_SESSION_KEY", sizeof("AES_SESSION_KEY")-1);
+	sha256_update(&sha256_ctx, (const uint8_t*)"AES_SESSION_KEY", sizeof("AES_SESSION_KEY")-1);
 	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->AES_key, digest, 16);
 	/* HMAC Key = SHA-256("HMAC_SESSION_KEY" | shared_secret) (256 bits) */
 	sha256_init(&sha256_ctx);
-	sha256_update(&sha256_ctx, (uint8_t*)"HMAC_SESSION_KEY", sizeof("HMAC_SESSION_KEY")-1);
+	sha256_update(&sha256_ctx, (const uint8_t*)"HMAC_SESSION_KEY", sizeof("HMAC_SESSION_KEY")-1);
 	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, channel->HMAC_key);
 	/* IV = SHA-256("SESSION_IV" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
-	sha256_update(&sha256_ctx, (uint8_t*)"SESSION_IV", sizeof("SESSION_IV")-1);
+	sha256_update(&sha256_ctx, (const uint8_t*)"SESSION_IV", sizeof("SESSION_IV")-1);
 	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->IV, digest, 16);
@@ -835,7 +835,7 @@ void token_channel_session_keys_update(token_channel *channel, const char *in, u
     }
 
     sha256_init(&sha256_ctx);
-    sha256_update(&sha256_ctx, (unsigned char*)in, in_len);
+    sha256_update(&sha256_ctx, (const unsigned char*)in, in_len);
     if(use_iv == 1){
         sha256_update(&sha256_ctx, channel->IV, sizeof(channel->IV));
     }
@@ -990,7 +990,7 @@ int token_change_pin(token_channel *channel, const char *pin, unsigned int pin_l
 	}
 	if(pin_type == TOKEN_PET_PIN){
 	        pbkdf_len = sizeof(pbkdf);
-        	if(hmac_pbkdf2(SHA512, (unsigned char*)pin, pin_len, channel->platform_salt, channel->platform_salt_len, channel->pbkdf2_iterations, SHA512_DIGEST_SIZE, pbkdf, &pbkdf_len)){
+        	if(hmac_pbkdf2(SHA512, (const unsigned char*)pin, pin_len, channel->platform_salt, channel->platform_salt_len, channel->pbkdf2_iterations, SHA512_DIGEST_SIZE, pbkdf, &pbkdf_len)){
                 	goto err;
 	        }
 		if(pbkdf_len != SHA512_DIGEST_SIZE){
@@ -1280,7 +1280,7 @@ int token_init(token_channel *channel){
 	 * In our use case, we expect the T=1 protocol to be used, so we
 	 * force its usage.
          */
-        if(SC_fsm_init(&card, 1, 1, 0, 64)){
+        if(SC_fsm_init(&card, 1, 1, 2, 64)){
                if(SC_fsm_init(&card, 0, 0, 0, 0)){
                        goto err;
                }
