@@ -46,10 +46,13 @@ int dfu_token_begin_decrypt_session(token_channel *channel, const unsigned char 
         /******* Token response ***********************************/
         if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
                 /* The smartcard responded an error */
-                goto err;
+                goto err_session;
         }
 
         return 0;
+err_session:
+	/* Notify that we had an explicit begin session error */
+	return -2;
 err:
         return -1;
 }
