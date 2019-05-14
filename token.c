@@ -1158,6 +1158,44 @@ err:
 	return -1;
 }
 
+/* Get random from the token */
+int token_get_random(token_channel *channel, char *random, uint8_t random_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+		goto err;
+	}
+	/* Sanity check on the asked random size */
+	if(random_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
+		goto err;
+	}
+	if(random == NULL){
+		goto err;
+	}
+
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_RANDOM; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 1; apdu.le = random_len; apdu.send_le = 1;
+	apdu.data[0] = random_len;
+	if(token_send_receive(channel, &apdu, &resp)){
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+		/* The smartcard responded an error */
+		goto err;
+	}
+	/* Sanity checks */
+	if(resp.le != random_len){
+		goto err;
+	}
+	/* The smartcard responded OK, copy our random */
+	memcpy(random, resp.data, random_len);
+
+	return 0;
+err:
+	return -1;
+}
+
 int token_secure_channel_init(token_channel *channel, const unsigned char *decrypted_platform_priv_key_data, uint32_t decrypted_platform_priv_key_data_len, const unsigned char *decrypted_platform_pub_key_data, uint32_t decrypted_platform_pub_key_data_len, const unsigned char *decrypted_token_pub_key_data, uint32_t decrypted_token_pub_key_data_len, ec_curve_type curve_type, unsigned int *remaining_tries){
 
 	if(channel == NULL){

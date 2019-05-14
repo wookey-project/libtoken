@@ -4,7 +4,7 @@
 #include "libtoken.h"
 
 /****** Token operations **************/
-/* Our dfuentication token specific instructions */
+/* Our DFU token specific instructions */
 enum dfu_token_instructions {
         /* This handles firmware encryption key derivation in DFU mode */
         TOKEN_INS_BEGIN_DECRYPT_SESSION = 0x20,

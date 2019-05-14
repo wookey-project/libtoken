@@ -80,9 +80,13 @@ enum token_instructions {
         TOKEN_INS_GET_PET_NAME = 0x08,
         TOKEN_INS_GET_RANDOM = 0x09,
 	TOKEN_INS_DERIVE_LOCAL_PET_KEY = 0x0a,
-        /* FIXME: To be removed, for debug purpose only */
+#if 0
+	/* NOTE: these instruction are here for debug purpose only and
+	 * should not be present/used in production!
+	 */
         TOKEN_INS_ECHO_TEST = 0x0b,
         TOKEN_INS_SECURE_CHANNEL_ECHO = 0x0c,
+#endif
 };
 
 enum token_responses {
@@ -187,6 +191,8 @@ int token_user_pin_lock(token_channel *channel);
 int token_full_lock(token_channel *channel);
 
 int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AID, unsigned int applet_AID_len, const databag *keybag, uint32_t keybag_num, uint32_t pbkdf2_iterations, ec_curve_type curve_type, token_unlock_operations *op, uint32_t num_ops, cb_token_callbacks *callbacks, unsigned char *sig_pub_key, unsigned int *sig_pub_key_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num);
+
+int token_get_random(token_channel *channel, char *random, uint8_t random_len);
 
 int token_map(void);
 
