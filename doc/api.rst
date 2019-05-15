@@ -2,8 +2,7 @@ About the token library API
 -------------------------------
 
 The API exposed by the library can be classified in three main parts:
-  * Common token abstractions, including secure channels initialization and
-  common instructions, as well as callbacks to handle Pet Pin, Pet Name and User Pin
+  * Common token abstractions, including secure channels initialization and common instructions, as well as callbacks to handle Pet Pin, Pet Name and User Pin
   * AUTH token specific instructions
   * DFU token specific instructions
 
