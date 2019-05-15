@@ -4,11 +4,8 @@ The token library
 The token library is used to communicate with the WooKey
 project user authentication token (AUTH) and DFU token (DFU):
 
-  * The AUTH token is the one used for holding the platform
-  master encryption key (the AES-CBC-ESSIV encryption key)
-  * The DFU token is the one used for key derivation when
-  performing a DFU (Device Firmware Update) operation through
-  USB
+  * The **AUTH token** is the one used for holding the platform master encryption key (the AES-CBC-ESSIV encryption key)
+  * The **DFU token** is the one used for key derivation when performing a DFU (Device Firmware Update) operation through USB
 
 A mutual authentication must be performed between the platform
 and the two tokens to establish a secure channel (with confidentiality,
@@ -39,12 +36,8 @@ platform, instructions that are specific to each token type
 (AUTH or DFU) can be send inside the secure channel. The libtoken
 library implements such instructions:
 
-  * AUTH: the main instruction with the AUTH token concerns
-  getting the user encryption master key from the internal secure flash
-  of the token
-  * DFU: the DFU token has two instructions. The first one opens
-  a firmware decryption session, and the second one asks the token
-  for key derivation for each new firmware chunk to decrypt
+  * AUTH: the main instruction with the AUTH token concerns getting the user encryption master key from the internal secure flash of the token
+  * DFU: the DFU token has two instructions. The first one opens a firmware decryption session, and the second one asks the token for key derivation for each new firmware chunk to decrypt
 
 
 .. toctree::
