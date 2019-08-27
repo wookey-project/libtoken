@@ -1216,15 +1216,18 @@ err:
 /**********************************************************************/
 
 static volatile bool map_voluntary;
+static volatile bool mapped;
 
 int token_early_init(token_map_mode_t token_map)
 {
     switch (token_map) {
         case TOKEN_MAP_AUTO:
             map_voluntary = false;
+            mapped = true;
             return SC_fsm_early_init(SC_MAP_AUTO);
         case TOKEN_MAP_VOLUNTARY:
             map_voluntary = true;
+            mapped = false;
             return SC_fsm_early_init(SC_MAP_VOLUNTARY);
         default:
             printf("invalid map mode\n");
@@ -1235,20 +1238,23 @@ int token_early_init(token_map_mode_t token_map)
 
 int token_map(void)
 {
-    if (map_voluntary) {
-        return SC_fsm_map();
+    if (map_voluntary && !mapped) {
+        if (SC_fsm_map() == 0) {
+            mapped = true;
+        }
     }
     return 0;
 }
 
 int token_unmap(void)
 {
-    if (map_voluntary) {
-        return SC_fsm_unmap();
+    if (map_voluntary && mapped) {
+        if (SC_fsm_unmap() == 0) {
+            mapped = false;
+        }
     }
     return 0;
 }
-
 
 
 /* Zeroize the whole channel (physical related stuff and secure channel suff) */
