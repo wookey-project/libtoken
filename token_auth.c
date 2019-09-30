@@ -22,6 +22,95 @@
 
 static const unsigned char auth_applet_AID[] = { 0x45, 0x75, 0x74, 0x77, 0x74, 0x75, 0x36, 0x41, 0x70, 0x70 };
 
+/* Get SDCard passwd  */
+int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+	/* SHA256 context used to derive our secrets */
+	sha256_context sha256_ctx;
+	/* Digest buffer */
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	/* AES context to decrypt the response */
+	aes_context aes_context;
+        uint8_t enc_IV[AES_BLOCK_SIZE];
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+		goto err;
+	}
+	/* Sanity check */
+	if(pin == NULL){
+		goto err;
+	}
+	/* Sanity checks on the key length and its derivative
+	 * The password can be upto 32 chars, size is 32 bytes.
+	 */
+	if(key_len != 32){
+		goto err;
+	}
+
+	memset(key, 0, key_len);
+
+        /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
+        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
+        add_iv(enc_IV, 1);
+
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_SDPWD; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len); apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+		/* The smartcard responded an error */
+		goto err;
+	}
+
+	/* This is not the length we expect! */
+    if(resp.le > key_len){
+        printf("resp. len: resp.le: %d\n", resp.le);
+		goto err;
+	}
+
+	/* In order to avoid fault attacks on the token logics without providing a PIN, sensitive
+	 * secrets are encrypted using a key derived from it.
+	 * The KEY used here is a 128-bit AES key as the first half of SHA-256(first_IV || SHA-256(PIN)).
+	 */
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, (const uint8_t*)pin, pin_len);
+	sha256_final(&sha256_ctx, digest);
+
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, channel->first_IV, sizeof(channel->first_IV));
+	sha256_update(&sha256_ctx, digest, sizeof(digest));
+	sha256_final(&sha256_ctx, digest);
+
+	/* Decrypt our response buffer */
+#if defined(__arm__)
+	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+#else
+	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
+#endif
+		goto err;
+	}
+	/* Decrypt */
+	if(aes_exec(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
+		goto err;
+	}
+
+	/* Now get the response */
+	memcpy(key, resp.data, key_len);
+    printf("received sd pwd: %s\n", key);
+
+	return 0;
+err:
+	return -1;
+
+}
+
+
+
+
 /* Get key and its derivative */
 int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len){
 	SC_APDU_cmd apdu;
