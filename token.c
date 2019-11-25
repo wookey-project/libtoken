@@ -659,17 +659,21 @@ static int token_apdu_resp_decrypt(token_channel *channel, SC_APDU_resp *resp){
 
 	/* Sanity check */
 	if((channel == NULL) || (resp == NULL)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	if(!channel->secure_channel){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* Response data contains at least a HMAC */
 	if(resp->le < sizeof(hmac_recv)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* If we have not received a short APDU, this is an error */
 	if(resp->le > SHORT_APDU_LE_MAX){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* Copy the received HMAC */
@@ -678,6 +682,7 @@ static int token_apdu_resp_decrypt(token_channel *channel, SC_APDU_resp *resp){
 CHECK_INTEGRITY_AGAIN:
 	/* Check the integrity */
 	if(hmac_init(&hmac_ctx, channel->HMAC_key, sizeof(channel->HMAC_key), SHA256)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
@@ -694,9 +699,11 @@ CHECK_INTEGRITY_AGAIN:
 	}
 	/* Finalize the HMAC */
 	if(hmac_finalize(&hmac_ctx, hmac, &hmac_len)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	if(hmac_len != sizeof(hmac)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
@@ -705,6 +712,7 @@ CHECK_INTEGRITY_AGAIN:
 		/* Integrity is not OK, try to self-synchronize a bit ... */
 		if(self_sync_attempts == 0){
 			/* We have exhausted our self-sync attempts: return an error */
+                  printf("%s : %d\n",__FILE__,__LINE__);
 			goto err;
 		}
 		self_sync_attempts--;
@@ -715,6 +723,7 @@ CHECK_INTEGRITY_AGAIN:
 
 	/* Sanity check against faults */
 	if(check_hmac_again(hmac, hmac_recv, sizeof(hmac)) != sectrue){
+        printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
@@ -729,9 +738,11 @@ CHECK_INTEGRITY_AGAIN:
 		/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
 		if(aes_init(&aes_context, channel->AES_key, AES128, channel->IV, CTR, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
+        printf("%s : %d\n",__FILE__,__LINE__);
 			goto err;
 		}
 		if(aes_exec(&aes_context, resp->data, resp->data, resp->le, -1, -1)){
+        printf("%s : %d\n",__FILE__,__LINE__);
 			goto err;
 		}
 		/* Increment the IV by as many blocks as necessary */
@@ -814,6 +825,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
 #endif
     /* Channel is not initialized */
     if(!channel->channel_initialized){
+        printf("%s : %d\n",__FILE__,__LINE__);
         goto err;
     }
 
@@ -824,18 +836,22 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
         /* If we have not space in the APDU, get out ... */
         if(apdu->lc > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
             /* We must have some place for the integrity tag */
+        printf("%s : %d\n",__FILE__,__LINE__);
             goto err;
         }
         /* Encrypt the APDU and append the integrity tag */
         if(token_apdu_cmd_encrypt(channel, apdu)){
+        printf("%s : %d\n",__FILE__,__LINE__);
             goto err;
         }
         /* Send the encrypted APDU and receive the encrypted response */
         if(SC_send_APDU_with_errors(channel, apdu, resp, &(channel->card))){
+        printf("%s : %d\n",__FILE__,__LINE__);
             goto err;
         }
         /* Decrypt the response in place and check its integrity */
         if(token_apdu_resp_decrypt(channel, resp)){
+        printf("%s : %d\n",__FILE__,__LINE__);
             goto err;
         }
     }
@@ -844,6 +860,7 @@ int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *
          * APDU and receive the raw response.
          */
         if(SC_send_APDU_with_errors(channel, apdu, resp, &(channel->card))){
+        printf("%s : %d\n",__FILE__,__LINE__);
             goto err;
         }
     }
