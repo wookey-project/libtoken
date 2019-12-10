@@ -24,7 +24,8 @@
  * ECDH, and a secure channel protected in confidentiality
  * with AES-CTR and in integrity with a HMAC SHA256.
  * We are deemed to use AES with 128-bit keys because of
- * the lack of support for AES-192 and AES-256 in the current
+ * a limitation of our masked AES (robust against SCA) being
+ * limited to 128-bit key, and also to improve support with
  * mainstream Javacard cards.
  */
 
@@ -147,6 +148,11 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     if(!are_equal(hmac, platform_hmac_tag, hmac_len)){
         goto err;
     }
+    /* Sanity check against faults */
+    if(check_hmac_again(hmac, platform_hmac_tag, hmac_len) != sectrue){
+	goto err;
+    }
+
 #if SMARTCARD_DEBUG
     printf("hmac equal OK\n");
 #endif
@@ -1406,6 +1412,9 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				 */
 				unsigned int j;
 				for(j = 0; j < 3; j++){
+					if((j + 3) > keybag_num){
+						goto err;
+					}
 					if(keybag[j+3].size > decrypted_keybag[j].size){
 						goto err;
 					}
