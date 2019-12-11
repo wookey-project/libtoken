@@ -34,6 +34,8 @@
 
 int token_send_receive(token_channel *channel, SC_APDU_cmd *apdu, SC_APDU_resp *resp);
 
+secbool check_hmac_again(const uint8_t *hmac, const uint8_t *hmac_recv, uint32_t size);
+
 int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t pet_pin_len, const databag *keybag, uint32_t keybag_num, databag *decrypted_keybag, uint32_t decrypted_keybag_num, uint32_t pbkdf2_iterations)
 {
     uint8_t pbkdf[SHA512_DIGEST_SIZE];
