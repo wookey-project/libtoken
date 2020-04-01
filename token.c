@@ -54,6 +54,8 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
     uint8_t token_key[SHA512_DIGEST_SIZE];
     SC_APDU_cmd apdu;
     SC_APDU_resp resp;
+    /* SHA-256 context for platform keys hash */
+    sha256_context sha256_ctx;
 
     /* Sanity checks */
     if((pet_pin == NULL) || (keybag == NULL) || (decrypted_keybag == NULL)) {
@@ -122,8 +124,24 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
 
     /* First, we check the HMAC value, the HMAC key is the 256 right most bits of
      * the PBKDF2 value.
+     * 
+     * [RB] NOTE: we use the platform data hash (SHA-256) as the HMAC Key because of possible SCA attacks
+     * on HMAC (see https://www.cryptoexperts.com/sbelaid/articleHMAC.pdf). Although this
+     * usage seems a bit counter-intuitive, this prevents extracting the encrypted data
+     * through side-channels (consumption, EM, etc.).
      */
-    if(hmac_init(&hmac_ctx, token_key+32, SHA256_DIGEST_SIZE, SHA256))
+    /* First we hash our local encrypted platform data to form the HMAC key */
+    /* NOTE: we reuse our hmac buffer to save SRAM space here! */
+    sha256_init(&sha256_ctx);
+    sha256_update(&sha256_ctx, platform_iv, platform_iv_len);
+    sha256_update(&sha256_ctx, platform_salt, platform_salt_len);
+    for(i = 0; i < (keybag_num - 3); i++){
+        sha256_update(&sha256_ctx, keybag[i+3].data, keybag[i+3].size);
+    } 
+    sha256_final(&sha256_ctx, hmac);
+  
+    /* NOTE: we reuse our hmac buffer to save SRAM space here! */
+    if(hmac_init(&hmac_ctx, hmac, SHA256_DIGEST_SIZE, SHA256))
     {
         printf("hmac init error\n");
         goto err;
@@ -131,15 +149,9 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
 #if SMARTCARD_DEBUG
     printf("hmac init OK\n");
 #endif
-    hmac_update(&hmac_ctx, platform_iv, platform_iv_len);
-    hmac_update(&hmac_ctx, platform_salt, platform_salt_len);
-    for(i = 0; i < (keybag_num - 3); i++){
-        hmac_update(&hmac_ctx, keybag[i+3].data, keybag[i+3].size);
-    }
-    if(hmac_finalize(&hmac_ctx, hmac, &hmac_len))
-    {
-        goto err;
-    }
+    hmac_update(&hmac_ctx, token_key+32, SHA256_DIGEST_SIZE);
+    hmac_finalize(&hmac_ctx, hmac, &hmac_len);
+
 #if SMARTCARD_DEBUG
     printf("hmac final OK\n");
 #endif
@@ -160,7 +172,7 @@ int decrypt_platform_keys(token_channel *channel, const char *pet_pin, uint32_t 
 #endif
     /* HMAC is OK, we can decrypt our data */
 #if defined(__arm__)
-    /* Use the protected masked AES ofr the platform keys decryption */
+    /* Use the protected masked AES for the platform keys decryption */
     if(aes_init(&aes_context, token_key, AES128, platform_iv, CTR, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
         /* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
@@ -239,6 +251,8 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	/* Shared secret buffer */
 	uint8_t shared_secret[NN_MAX_BIT_LEN / 8];
 	uint8_t digest[SHA256_DIGEST_SIZE];
+	/* the token challenge */
+	uint8_t token_challenge[16];
 
 	/* Sanity checks */
 	if((channel == NULL) || (decrypted_platform_priv_key_data == NULL) || (decrypted_platform_pub_key_data == NULL) || (decrypted_token_pub_key_data == NULL) || (remaining_tries == NULL)){
@@ -250,6 +264,23 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         sys_get_systick(&start, PREC_MILLI);
 #endif
 
+	/* Get the challenge from the token */
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_CHALLENGE; apdu.p1 = 0x00; apdu.p2 = 0x00;
+	apdu.lc = 0;
+	apdu.le = sizeof(token_challenge); apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+		goto err;
+	}
+	/******* Smartcard response ***********************************/
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+		goto err;
+	}
+	if(resp.le != sizeof(token_challenge)){
+		/* This is not the size we expect */
+		goto err;
+	}
+	memcpy(token_challenge, resp.data, sizeof(token_challenge));
+	/* ECDH core */
 	/******* Reader answer ***********************************/
         /* Importing specific curve parameters from its type.
          */
@@ -342,6 +373,10 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	if(ec_sign_update(&sig_ctx, (const uint8_t*)apdu.data, apdu.lc)){
 		goto err;
 	}
+	/* Update with the challenge sent by the token */
+	if(ec_sign_update(&sig_ctx, token_challenge, sizeof(token_challenge))){
+		goto err;
+	}
 	/* Append the signature in the APDU */
 	if(ec_sign_finalize(&sig_ctx, &(apdu.data[apdu.lc]), siglen)){
 		goto err;
@@ -364,11 +399,10 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	if(token_send_receive(channel, &apdu, &resp)){
 		goto err;
 	}
-
 	/******* Smartcard response ***********************************/
 	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
 		/* The smartcard responded an error */
-		if((resp.sw1 == TOKEN_INS_SECURE_CHANNEL_INIT) && (resp.sw2 == 0x00) && (resp.le == 2)){
+		if((((resp.sw1 << 8) | (resp.sw2 & 0xff)) == TOKEN_RESP_NOK) && (resp.le == 2)){
 			/* Get the remaining tries */
 			*remaining_tries = (resp.data[0] << 8) | resp.data[1];
 		}
