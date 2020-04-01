@@ -80,17 +80,19 @@ enum token_instructions {
         TOKEN_INS_GET_PET_NAME = 0x08,
         TOKEN_INS_GET_RANDOM = 0x09,
 	TOKEN_INS_DERIVE_LOCAL_PET_KEY = 0x0a,
+	TOKEN_INS_GET_CHALLENGE = 0x0b,
 #if 0
 	/* NOTE: these instruction are here for debug purpose only and
 	 * should not be present/used in production!
 	 */
-        TOKEN_INS_ECHO_TEST = 0x0b,
-        TOKEN_INS_SECURE_CHANNEL_ECHO = 0x0c,
+        TOKEN_INS_ECHO_TEST = 0x0c,
+        TOKEN_INS_SECURE_CHANNEL_ECHO = 0x0d,
 #endif
 };
 
 enum token_responses {
-        TOKEN_RESP_OK = 0x9000,
+        TOKEN_RESP_OK  = 0x9000,
+        TOKEN_RESP_NOK = 0x6300,
 };
 
 
