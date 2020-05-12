@@ -8,7 +8,7 @@
 #include "libc/stdio.h"
 #include "libc/nostd.h"
 #include "libc/string.h"
-
+#include "libc/sanhandlers.h"
 
 #define SMARTCARD_DEBUG
 #define MEASURE_TOKEN_PERF
@@ -113,6 +113,13 @@ static cb_token_request_pin_t external_request_pin = NULL;
 static char saved_user_pin[32] = { 0 };
 static char saved_user_pin_len = 0;
 static int local_request_pin(char *pin, unsigned int *pin_len, token_pin_types pin_type, token_pin_actions action){
+	if(external_request_pin == NULL){
+		goto err;
+	}
+	if(handler_sanity_check((void*)external_request_pin)){
+		sys_exit();
+		goto err;
+	}
 	external_request_pin(pin, pin_len, pin_type, action);
 	if((pin_type == TOKEN_USER_PIN) && (action == TOKEN_PIN_AUTHENTICATE)){
 		/* Save the PIN for later */
@@ -130,6 +137,8 @@ static int local_request_pin(char *pin, unsigned int *pin_len, token_pin_types p
 err:
 	return -1;
 }
+/* Register callback */
+ADD_GLOB_HANDLER(local_request_pin)
 
 int auth_token_unlock_ops_exec(token_channel *channel, token_unlock_operations *ops, uint32_t num_ops, cb_token_callbacks *callbacks, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
 	if(token_unlock_ops_exec(channel, auth_applet_AID, sizeof(auth_applet_AID), keybag_auth, sizeof(keybag_auth)/sizeof(databag), PLATFORM_PBKDF2_ITERATIONS, USED_SIGNATURE_CURVE, ops, num_ops, callbacks, NULL, NULL, saved_decrypted_keybag, saved_decrypted_keybag_num)){
