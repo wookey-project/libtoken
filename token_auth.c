@@ -116,8 +116,7 @@ static int local_request_pin(char *pin, unsigned int *pin_len, token_pin_types p
 	if(external_request_pin == NULL){
 		goto err;
 	}
-	if(handler_sanity_check((void*)external_request_pin)){
-		sys_exit();
+	if(handler_sanity_check_with_panic((physaddr_t)external_request_pin)){
 		goto err;
 	}
 	external_request_pin(pin, pin_len, pin_type, action);
