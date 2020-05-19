@@ -1539,8 +1539,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 					goto err;
 				}
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 					goto err;
 				}
 			        /* Ask the user for the PET PIN */
@@ -1548,8 +1547,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        if(callbacks->request_pin(pet_pin, &pet_pin_len, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE)){
 				        printf("[Pet Pin] Failed to ask for pet pin!\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, 0);
@@ -1570,15 +1568,13 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				        /* Ask the user for the PET PIN */
 			        	pet_pin_len = sizeof(pet_pin);
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->request_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 						goto err;
 					}
 				        if(callbacks->request_pin(pet_pin, &pet_pin_len, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE)){
 					        printf("[Pet Pin] Failed to ask for pet pin!\n");
 						/* Sanity check callback */
-						if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-							sys_exit();
+						if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 							goto err;
 						}
 						callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
@@ -1589,8 +1585,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				if(token_send_pin(channel, pet_pin, pet_pin_len, &pin_ok, &remaining_tries, TOKEN_PET_PIN)){
 					printf("[Token] Error sending PET pin\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
@@ -1599,8 +1594,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				if(!pin_ok){
 					printf("[Token] PET PIN is NOT OK, remaining tries = %d\n", remaining_tries);
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					if (callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries)) {
@@ -1609,8 +1603,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				}
 				else{
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					if(callbacks->acknowledge_pin(TOKEN_ACK_VALID, TOKEN_PET_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries)){
@@ -1628,15 +1621,13 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			        /* Ask the user for the PET PIN */
 			        user_pin_len = sizeof(user_pin);
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 					goto err;
 				}
 			        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE)){
 				        printf("[User Pin] Failed to ask for pet pin!\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, 0);
@@ -1655,8 +1646,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				/* If we have already asked for the user pin, no need to do it again! */
 				if(!got_user_pin){
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->request_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 						goto err;
 					}
 					if(callbacks->request_pin == NULL){
@@ -1665,8 +1655,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				        /* Ask the user for the user PIN */
 			        	user_pin_len = sizeof(user_pin);
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->request_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 						goto err;
 					}
 				        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE)){
@@ -1679,8 +1668,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				if(token_send_pin(channel, user_pin, user_pin_len, &pin_ok, &remaining_tries, TOKEN_USER_PIN)){
 					printf("[Token] Error sending user pin\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries);
@@ -1689,8 +1677,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				if(!pin_ok){
 					printf("[Token] user PIN is NOT OK, remaining tries = %d\n", remaining_tries);
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					if(callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries)){
@@ -1699,8 +1686,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				}
 				else{
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					if(callbacks->acknowledge_pin(TOKEN_ACK_VALID, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE, remaining_tries)){
@@ -1721,8 +1707,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 			                goto err;
 			        }
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pet_name_confirmation)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pet_name_confirmation)){
 					goto err;
 				}
 				if(callbacks->request_pet_name_confirmation(pet_name, pet_name_len)){
@@ -1739,15 +1724,13 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				/* Ask the user the new PET pin */
 			        pet_pin_len = sizeof(pet_pin);
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 					goto err;
 				}
 			        if(callbacks->request_pin(pet_pin, &pet_pin_len, TOKEN_PET_PIN, TOKEN_PIN_MODIFY)){
 				        printf("[Pet Pin] Failed to ask for the NEW pet pin!\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_PET_PIN, TOKEN_PIN_MODIFY, 0);
@@ -1758,8 +1741,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 					goto err;
 				}
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 					goto err;
 				}
 				callbacks->acknowledge_pin(TOKEN_ACK_VALID, TOKEN_PET_PIN, TOKEN_PIN_MODIFY, 0);
@@ -1773,15 +1755,13 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				/* Ask the user the new user pin */
 			        user_pin_len = sizeof(user_pin);
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pin)){
 					goto err;
 				}
 			        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_MODIFY)){
 				        printf("[User Pin] Failed to ask for the NEW user pin!\n");
 					/* Sanity check callback */
-					if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-						sys_exit();
+					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
 					}
 					callbacks->acknowledge_pin(TOKEN_ACK_INVALID, TOKEN_USER_PIN, TOKEN_PIN_MODIFY, 0);
@@ -1792,8 +1772,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 					goto err;
 				}
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->acknowledge_pin)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 					goto err;
 				}
 				callbacks->acknowledge_pin(TOKEN_ACK_VALID, TOKEN_USER_PIN, TOKEN_PIN_MODIFY, 0);
@@ -1807,8 +1786,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 				/* Ask the user for the new pet name */
 			        pet_name_len = sizeof(pet_name);
 				/* Sanity check callback */
-				if(handler_sanity_check((void*)callbacks->request_pet_name)){
-					sys_exit();
+				if(handler_sanity_check_with_panic((physaddr_t)callbacks->request_pet_name)){
 					goto err;
 				}
 			        if(callbacks->request_pet_name(pet_name, &pet_name_len)){
