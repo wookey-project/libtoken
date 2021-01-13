@@ -138,29 +138,6 @@ typedef enum {
  */
 #define PROTECTED_AES AES_SOFT_ANSSI_MASKED
 
-/******* Crypto helpers ****************/
-
-static inline void inc_iv(uint8_t IV[16]){
-    int i;
-    for(i = 16; i > 0; i--){
-        if(++IV[i-1]){
-            break;
-        }
-    }
-
-    return;
-}
-
-static inline void add_iv(uint8_t IV[16], unsigned int inc){
-    unsigned int i;
-
-    for(i = 0; i < inc; i++){
-        inc_iv(IV);
-    }
-
-    return;
-}
-
 int token_early_init(token_map_mode_t token_map);
 
 /* High level functions to communicate with the token */

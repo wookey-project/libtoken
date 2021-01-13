@@ -587,7 +587,7 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 		hmac_update(&hmac_ctx, apdu->data, apdu->lc);
 	}
 	/* Always increment our anti-replay counter manually at least once fot the next data batch to send/receive */
-	inc_iv(channel->IV);
+	increment_iv(channel->IV);
 
 	/* When encrypting an APDU, we always expect a response with at least 32 bytes of HMAC.
 	 * In order to avoid any issue, we ask for a Le = 0 meaning that we expect a maximum amount of
@@ -708,7 +708,7 @@ CHECK_INTEGRITY_AGAIN:
 			goto err;
 		}
 		self_sync_attempts--;
-		inc_iv(channel->IV);
+		increment_iv(channel->IV);
 		goto CHECK_INTEGRITY_AGAIN;
 	}
 
@@ -738,7 +738,7 @@ CHECK_INTEGRITY_AGAIN:
                 add_iv(channel->IV, resp->le / AES_BLOCK_SIZE);
 	}
 	/* Always increment our anti-replay counter manually at least once fot the next data batch to send/receive */
-	inc_iv(channel->IV);
+	increment_iv(channel->IV);
 
 	return 0;
 err:
