@@ -7,12 +7,12 @@
 /* Our authentication token specific instructions */
 enum auth_token_instructions {
         /* This handles the encryption master key in AUTH mode */
-        TOKEN_INS_GET_KEY = 0x10,
+        TOKEN_INS_GET_KEY   = 0x10,
         TOKEN_INS_GET_SDPWD = 0x11,
 };
 
 /* High level functions to communicate with the token */
-int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len, unsigned char* sdpwd, unsigned int sdpwd_len);
+int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len);
 
 int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len);
 

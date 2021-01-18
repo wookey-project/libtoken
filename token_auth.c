@@ -23,7 +23,7 @@
 static const unsigned char auth_applet_AID[] = { 0x45, 0x75, 0x74, 0x77, 0x74, 0x75, 0x36, 0x41, 0x70, 0x70 };
 
 /* Get SDCard passwd  */
-int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len){
+int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *sdpwd, unsigned int sdpwd_len){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
 	/* SHA256 context used to derive our secrets */
@@ -34,45 +34,43 @@ int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int p
 	aes_context aes_context;
         uint8_t enc_IV[AES_BLOCK_SIZE];
 
-        printf("%s : %d\n",__FILE__,__LINE__);
 	if((channel == NULL) || (channel->channel_initialized == 0)){
 		goto err;
 	}
-        printf("%s : %d\n",__FILE__,__LINE__);
 	/* Sanity check */
-	if(pin == NULL){
+	if((pin == NULL) || (sdpwd == NULL)){
 		goto err;
 	}
 	/* Sanity checks on the key length and its derivative
 	 * The password can be upto 16 chars, size is 16 bytes.
 	 */
-	if(key_len != 16){
-        printf("%s : %d wrong key len %d\n",__FILE__,__LINE__,key_len);
+	if(sdpwd_len != 16){
+                printf("%s : %d wrong key len %d\n", __FILE__, __LINE__, sdpwd_len);
 		goto err;
 	}
 
-	memset(key, 0, key_len);
+	memset(sdpwd, 0, sdpwd_len);
 
         /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
         add_iv(enc_IV, 1);
 
-	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_SDPWD; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len); apdu.send_le = 1;
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_SDPWD; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = sdpwd_len; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
-        printf("%s : %d\n",__FILE__,__LINE__);
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
 	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
-        printf("%s : %d sw1 %x sw2 %x\n",__FILE__,__LINE__,resp.sw1,resp.sw2);
-        printf("%s : %d\n",__FILE__,__LINE__);
+                printf("%s : %d sw1 %x sw2 %x\n",__FILE__,__LINE__, resp.sw1, resp.sw2);
+                printf("%s : %d\n",__FILE__,__LINE__);
 		/* The smartcard responded an error */
 		goto err;
 	}
 
 	/* This is not the length we expect! */
-    if(resp.le > key_len){
-        printf("resp. len: resp.le: %d\n", resp.le);
+        if(resp.le != sdpwd_len){
+                printf("resp. len: resp.le: %d\n", resp.le);
 		goto err;
 	}
 
@@ -94,21 +92,19 @@ int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int p
 	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
 	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
-        printf("%s : %d\n",__FILE__,__LINE__);
 	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
 	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
-        printf("%s : %d\n",__FILE__,__LINE__);
 	/* Decrypt */
 	if(aes_exec(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
-	/* Now get the response */
-	memcpy(key, resp.data, key_len);
-    printf("received sd pwd: %s\n", key);
+        memcpy(sdpwd, resp.data, sdpwd_len);
 
 	return 0;
 err:
@@ -120,7 +116,7 @@ err:
 
 
 /* Get key and its derivative */
-int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len, unsigned char *sdpwd, unsigned int sdpwd_len){
+int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
 	/* SHA256 context used to derive our secrets */
@@ -131,13 +127,12 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	aes_context aes_context;
         uint8_t enc_IV[AES_BLOCK_SIZE];
 
-        printf("on rentre dedans au moins\n");
 	if((channel == NULL) || (channel->channel_initialized == 0)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* Sanity check */
-	if((pin == NULL) || (key == NULL) || (h_key == NULL) || (sdpwd == NULL)){
+	if((pin == NULL) || (key == NULL) || (h_key == NULL)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
@@ -145,7 +140,7 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	 * The Key is an AES-256 key, size is 32 bytes.
 	 * The Key derivative is a SHA-256 of the key, i.e. 32 bytes.
 	 */
-	if((key_len != 32) || (h_key_len != SHA256_DIGEST_SIZE) || (sdpwd_len != 16)){
+	if((key_len != 32) || (h_key_len != SHA256_DIGEST_SIZE)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
@@ -157,21 +152,21 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
         add_iv(enc_IV, 1);
 
-	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len + h_key_len + sdpwd_len); apdu.send_le = 1;
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len + h_key_len); apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
 	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
-          printf("%s : %d\n",__FILE__,__LINE__);
+                 printf("%s : %d\n",__FILE__,__LINE__);
 		/* The smartcard responded an error */
 		goto err;
 	}
 
 	/* This is not the length we expect! */
-	if(resp.le != (key_len + h_key_len + sdpwd_len)){
-          printf("%s : %d\n",__FILE__,__LINE__);
+	if(resp.le != (key_len + h_key_len)){
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
@@ -196,12 +191,12 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
 	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
-          printf("%s : %d\n",__FILE__,__LINE__);
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* Decrypt */
 	if(aes_exec(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
-          printf("%s : %d\n",__FILE__,__LINE__);
+                printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
@@ -209,7 +204,6 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	memcpy(key, resp.data, key_len);
 	memcpy(h_key, resp.data + key_len, h_key_len);
 
-        memcpy(sdpwd,resp.data + key_len + h_key_len, sdpwd_len);
 	return 0;
 err:
 	return -1;
@@ -270,6 +264,12 @@ int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, 
 	if((AES_CBC_ESSIV_key_len != 32) || (AES_CBC_ESSIV_h_key_len != 32)){
 		goto err;
 	}
+	if(sdpwd == NULL){
+		goto err;
+	}
+	if(sdpwd_len != 16){
+		goto err;
+	}
 	if(callbacks == NULL){
 		goto err;
 	}
@@ -282,11 +282,14 @@ int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, 
 		goto err;
 	}
 	/*************** Get the CBC-ESSIV key and its hash */
-	if(auth_token_get_key(channel, saved_user_pin, saved_user_pin_len, AES_CBC_ESSIV_key, AES_CBC_ESSIV_key_len, AES_CBC_ESSIV_h_key, AES_CBC_ESSIV_h_key_len,sdpwd,sdpwd_len)){
+	if(auth_token_get_key(channel, saved_user_pin, saved_user_pin_len, AES_CBC_ESSIV_key, AES_CBC_ESSIV_key_len, AES_CBC_ESSIV_h_key, AES_CBC_ESSIV_h_key_len)){
 		goto err;
 	}
-        
-        
+	/*************** Get the SD card locking/unlocking password */
+        if(auth_token_get_sdpwd(channel, saved_user_pin, saved_user_pin_len, sdpwd, sdpwd_len)){
+		goto err;
+        }
+         
 	return 0;
 
 err:
