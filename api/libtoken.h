@@ -177,4 +177,6 @@ int token_map(void);
 
 int token_unmap(void);
 
+void do_error_recovery_sleep(token_channel *channel);
+
 #endif /* __SMARTCARD_TOKEN_H__ */
