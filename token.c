@@ -254,8 +254,6 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	ec_pub_key token_pub_key;
         /* The projective point we will use */
         prj_pt Q;
-       /* The equivalent affine point */
-        aff_pt Q_aff;
         nn d;
 #ifdef USE_SIG_BLINDING
 	nn scalar_b;
@@ -372,9 +370,8 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         sys_get_systick(&start, PREC_MILLI);
 #endif
 
-	/* Normalize Q to have the unique representation (by moving to affine representation and back to projective) */
-	prj_pt_to_aff(&Q_aff, &Q);
-	ec_shortw_aff_to_prj(&Q, &Q_aff);
+	/* Normalize Q to have the unique representation (affine equivalent) */
+	prj_pt_unique(&Q, &Q);
 
         /* Export Q to serialize it in the APDU.
          * Our export size is exactly 3 coordinates in Fp, so this should be 3 times the size
@@ -495,14 +492,14 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 
 	/* Clear d */
 	nn_uninit(&d);
-	/* Move to affine representation to get the unique representation of the point
+	/* Get the unique representation of the point
 	 * (the other party should send us a normalized point, but nevermind do it anyways).
 	 */
-        prj_pt_to_aff(&Q_aff, &Q);
-	/* The shared secret is Q_aff.x, which is 32 bytes:
+        prj_pt_unique(&Q, &Q);
+	/* The shared secret is Q.X, which is 32 bytes:
 	 * we derive our AES 256-bit secret key, our 256-bit HMAC key as well as our initial IV from this value.
 	 */
-	fp_export_to_buf(shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen), &(Q_aff.x));
+	fp_export_to_buf(shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen), &(Q.X));
 
 	/* AES Key = SHA-256("AES_SESSION_KEY" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
@@ -533,7 +530,6 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 
         /* Uninit local variables */
         prj_pt_uninit(&Q);
-        aff_pt_uninit(&Q_aff);
 
 	return 0;
 err:
