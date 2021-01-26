@@ -8,6 +8,7 @@
 #include "libc/stdio.h"
 #include "libc/nostd.h"
 #include "libc/string.h"
+#include "libc/random.h"
 
 #include "libc/sanhandlers.h"
 
@@ -32,6 +33,21 @@
  */
 
 #define MEASURE_TOKEN_PERF
+
+/* Token error recovery function */
+void do_error_recovery_sleep(token_channel *channel){
+	if((channel != NULL) && (channel->error_recovery_sleep != 0)){
+		/* Choose a random value <= channel->error_recovery_sleep */
+		uint32_t rand_wait = 0;
+		if(get_random((unsigned char*)&rand_wait, sizeof(rand_wait))){
+			sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
+		}
+		else{
+			sys_sleep(rand_wait % (channel->error_recovery_sleep), SLEEP_MODE_DEEP);
+		}
+	}
+	return;
+}
 
 /* Self-synchronization anti-replay window of 10 attempts of a maximum size of AES blocks in an APDU */
 #define ANTI_REPLAY_SELF_SYNC_WINDOW    (10*16)
@@ -392,9 +408,8 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	printf("[Token] ECDSA SIGN = %lld milliseconds\n", (end - start));
 #endif
 
-	if(channel->error_recovery_sleep){
-		sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
-	}
+	do_error_recovery_sleep(channel);
+
 	/* The instruction to perform an ECDH is TOKEN_INS_SECURE_CHANNEL_INIT: the reader sends its random scalar
 	 * and receives the card random scalar.
 	 */
@@ -782,9 +797,7 @@ static int SC_send_APDU_with_errors(token_channel *channel, SC_APDU_cmd *apdu, S
 #if SMARTCARD_DEBUG
         	printf("...retrying!\n");
 #endif
-		if(channel->error_recovery_sleep){
-			sys_sleep(channel->error_recovery_sleep, SLEEP_MODE_DEEP);
-		}
+		do_error_recovery_sleep(channel);
 
 		if(ret && (num_tries >= channel->error_recovery_max_send_retries)){
 			goto err;
@@ -1329,8 +1342,12 @@ void token_zeroize_channel(token_channel *channel){
 
         channel->channel_initialized = 0;
 	memset((void*)&(channel->card), 0, sizeof(channel->card));
-	channel->error_recovery_sleep = 0;
-	channel->error_recovery_max_send_retries = 0;
+	/* NOTE: we keep the channel->error_recovery_sleep and 
+         * channel->error_recovery_max_send_retries with their initial values */
+	/* 
+         * channel->error_recovery_sleep = 0;
+	 * channel->error_recovery_max_send_retries = 0;
+         */
 
 	token_zeroize_secure_channel(channel);
 
@@ -1379,8 +1396,8 @@ int token_init(token_channel *channel){
 
 	channel->channel_initialized = 0;
 	channel->secure_channel = 0;
-	/* By default, error retries (in case of noise on the line) are set to 20 */
-	channel->error_recovery_max_send_retries = 20;
+	/* By default, error retries (in case of noise on the line) are set to 5 */
+	channel->error_recovery_max_send_retries = 5;
 
         /* Initialize the card communication. First, try to negotiate PSS,
          * and do it without negotiation if it fails.
@@ -1642,7 +1659,7 @@ int token_unlock_ops_exec(token_channel *channel, const unsigned char *applet_AI
 					goto err;
 				}
 			        if(callbacks->request_pin(user_pin, &user_pin_len, TOKEN_USER_PIN, TOKEN_PIN_AUTHENTICATE)){
-				        printf("[User Pin] Failed to ask for pet pin!\n");
+				        printf("[User Pin] Failed to ask for user pin!\n");
 					/* Sanity check callback */
 					if(handler_sanity_check_with_panic((physaddr_t)callbacks->acknowledge_pin)){
 						goto err;
