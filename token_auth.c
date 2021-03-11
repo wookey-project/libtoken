@@ -361,17 +361,18 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
-	/* Encrypt */
-	if(aes_exec(&aes_context, resp.data, resp.data, resp.le, -1, -1)){
-                printf("%s : %d\n",__FILE__,__LINE__);
-		goto err;
-	}
 
 	/* Sanity check on the platform key length */
 	if(key_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
         	printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
+	/* Encrypt */
+	if(aes_exec(&aes_context, key, apdu.data, key_len, -1, -1)){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_SEND_PKEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = key_len; apdu.le = 0; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
           printf("%s : %d\n",__FILE__,__LINE__);
@@ -418,6 +419,12 @@ int auth_token_fido_register(token_channel *channel, const unsigned char *app_da
 		goto err;
 	}
 
+        /* Copy elements */
+        if(FIDO_APPLICATION_PARAMETER_SIZE > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data, app_data, FIDO_APPLICATION_PARAMETER_SIZE);
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_REGISTER; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = FIDO_APPLICATION_PARAMETER_SIZE; apdu.le = 0; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
           printf("%s : %d\n",__FILE__,__LINE__);
@@ -484,23 +491,32 @@ int auth_token_fido_authenticate(token_channel *channel, const unsigned char *ap
 			goto err;
 		}
 	}
-	/* Sanity checks on the lengths.
-	 */
-	if(app_data_len != FIDO_APPLICATION_PARAMETER_SIZE){
-        	printf("%s : %d\n",__FILE__,__LINE__);
-		goto err;
-	}
-	if(key_handle_len != FIDO_KEY_HANDLE_SIZE){
-        	printf("%s : %d\n",__FILE__,__LINE__);
-		goto err;
-	}
-
 	if(check_only != 0){
 		apdu.ins = TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY;
 	}
 	else{
 		apdu.ins = TOKEN_INS_FIDO_AUTHENTICATE;
 	}
+
+	/* Copy input */
+	if(app_data_len != FIDO_APPLICATION_PARAMETER_SIZE){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+        if(app_data_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data, app_data, FIDO_APPLICATION_PARAMETER_SIZE);
+	if(key_handle_len != FIDO_KEY_HANDLE_SIZE){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+        if(key_handle_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE - FIDO_APPLICATION_PARAMETER_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data + FIDO_APPLICATION_PARAMETER_SIZE, key_handle, FIDO_KEY_HANDLE_SIZE);
 	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = (FIDO_APPLICATION_PARAMETER_SIZE + FIDO_KEY_HANDLE_SIZE); apdu.le = 0; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
           printf("%s : %d\n",__FILE__,__LINE__);
