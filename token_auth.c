@@ -58,7 +58,7 @@ int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int p
 
         /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
-        add_iv(enc_IV, 1);
+        add_iv(enc_IV, 1); /* Mandatory increment by one even if Lc = 0 */
 
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_SDPWD; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = sdpwd_len; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
@@ -154,7 +154,7 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 
         /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
-        add_iv(enc_IV, 1);
+        add_iv(enc_IV, 1); /* Mandatory increment by one even if Lc = 0 */
 
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len + h_key_len); apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
@@ -313,7 +313,7 @@ err:
 
 /* Only for FIDO tokens. Send our local platform key secret for key handles computation.
  */
-int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len){
+int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, unsigned char *hprivkey, unsigned int *hprivkey_len){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
 	/* SHA256 context used to derive our secrets */
@@ -322,13 +322,14 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	/* AES context to encrypt the half key */
 	aes_context aes_context;
+        uint8_t enc_IV[AES_BLOCK_SIZE];
 
 	if((channel == NULL) || (channel->channel_initialized == 0)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 	/* Sanity check */
-	if(key == NULL){
+	if((key == NULL) || (hprivkey == NULL) || (hprivkey_len == NULL)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
@@ -356,13 +357,15 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 		goto err;
 	}
 
+	/* Copy IV */
+        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
 	/* Encrypt our command buffer */
 #if defined(__arm__)
 	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
-	if(aes_init(&aes_context, digest, AES128, channel->IV, CBC, AES_ENCRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
 #else
 	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
-	if(aes_init(&aes_context, digest, AES128, channel->IV, CBC, AES_ENCRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
 #endif
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
@@ -373,6 +376,10 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
+
+	/* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
+        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
+        add_iv(enc_IV, 1 + (key_len / AES_BLOCK_SIZE)); /* 2 AES blocks sent + one mandatory increment */
 
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_SEND_PKEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = key_len; apdu.le = 0; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
@@ -387,13 +394,52 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 	}
 
 	/* This is not the length we expect! */
-	if(resp.le != 0){
+	if(resp.le != 16){
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
+	/* We get back the half private FIDO key */
+	if(*hprivkey_len < 16){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Decrypt sensitive data */
+	/* In order to avoid fault attacks on the token logics without providing a PIN, sensitive
+	 * secrets are encrypted using a key derived from it.
+	 * The KEY used here is a 128-bit AES key as the first half of SHA-256(first_IV || SHA-256(PIN)).
+	 */
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, (const uint8_t*)saved_user_pin, saved_user_pin_len);
+	sha256_final(&sha256_ctx, digest);
+
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, channel->first_IV, sizeof(channel->first_IV));
+	sha256_update(&sha256_ctx, digest, sizeof(digest));
+	sha256_final(&sha256_ctx, digest);
+
+	/* Decrypt our response buffer */
+#if defined(__arm__)
+	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+#else
+	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
+#endif
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Decrypt */
+	if(aes_exec(&aes_context, resp.data, hprivkey, resp.le, -1, -1)){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	*hprivkey_len = 16;
 
 	return 0;
 err:
+	if(hprivkey_len != NULL){
+		*hprivkey_len = 0;
+	}
 	return -1;
 
 }
