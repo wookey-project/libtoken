@@ -350,6 +350,12 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 	sha256_update(&sha256_ctx, digest, sizeof(digest));
 	sha256_final(&sha256_ctx, digest);
 
+	/* Sanity check on the platform key length */
+	if(key_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
 	/* Encrypt our command buffer */
 #if defined(__arm__)
 	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
@@ -362,11 +368,6 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 		goto err;
 	}
 
-	/* Sanity check on the platform key length */
-	if(key_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
-        	printf("%s : %d\n",__FILE__,__LINE__);
-		goto err;
-	}
 	/* Encrypt */
 	if(aes_exec(&aes_context, key, apdu.data, key_len, -1, -1)){
                 printf("%s : %d\n",__FILE__,__LINE__);
@@ -472,7 +473,7 @@ err:
 
 /* Only for FIDO tokens. FIDO AUTHENTICATE.
  */
-int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only){
+int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only, bool *check_result){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
 
@@ -481,10 +482,11 @@ int auth_token_fido_authenticate(token_channel *channel, const unsigned char *ap
 		goto err;
 	}
 	/* Sanity check */
-	if((app_data == NULL) || (key_handle == NULL)){
+	if((app_data == NULL) || (key_handle == NULL) || (check_result == NULL)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
+	*check_result = false;
 	if(check_only == 0){
 		if((ecdsa_priv_key == NULL) || (ecdsa_priv_key_len == NULL)){
         	  printf("%s : %d\n",__FILE__,__LINE__);
@@ -535,8 +537,12 @@ int auth_token_fido_authenticate(token_channel *channel, const unsigned char *ap
 			goto err;
 		}
 		if(resp.data[0] != 0x01){
-			/* Key handle checl failed */
-			goto err;			
+			/* Key handle check failed */
+			*check_result = false;
+		}
+		else{
+			/* Key handle check is OK */
+			*check_result = true;
 		}
 		/* If we are in check only mode, this is it, check succeeded! */
 		if(ecdsa_priv_key_len != NULL){
@@ -544,24 +550,37 @@ int auth_token_fido_authenticate(token_channel *channel, const unsigned char *ap
 		}
 	}
 	else{
-		/* Not check only mode, get back the private key */
-		/* This is not the length we expect! */
-		if(resp.le != FIDO_PRIV_KEY_SIZE){
-        	        printf("%s : %d\n",__FILE__,__LINE__);
-			goto err;
+		/* Not check only mode, get back the private key if possible */
+		if(resp.le == 1){
+			if(resp.data[0] != 0x00){
+                 		printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			/* Key handle check failed ... */
+			*check_result = false;
 		}
-
-		/* Now copy the response */
-		/**/
-		if(*ecdsa_priv_key_len < FIDO_PRIV_KEY_SIZE){
-	        	printf("%s : %d\n",__FILE__,__LINE__);
-			goto err;
+		else{
+			/* This is not the length we expect! */
+			if(resp.le != FIDO_PRIV_KEY_SIZE){
+        		        printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			/* Now copy the response */
+			/**/
+			if(*ecdsa_priv_key_len < FIDO_PRIV_KEY_SIZE){
+	        		printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			*check_result = true;
+			*ecdsa_priv_key_len = FIDO_PRIV_KEY_SIZE;
+			memcpy(ecdsa_priv_key, resp.data, FIDO_PRIV_KEY_SIZE);
 		}
-		*ecdsa_priv_key_len = FIDO_PRIV_KEY_SIZE;
-		memcpy(ecdsa_priv_key, resp.data, FIDO_PRIV_KEY_SIZE);
 	}
 	return 0;
 err:
+	if(check_result != NULL){
+		*check_result = false;
+	}
 	if(ecdsa_priv_key_len != NULL){
 		*ecdsa_priv_key_len = 0;
 	}

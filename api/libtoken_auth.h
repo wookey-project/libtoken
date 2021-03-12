@@ -32,7 +32,7 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 
 int auth_token_fido_register(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, unsigned char *key_handle, unsigned int *key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len);
 
-int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only);
+int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only, bool *check_result);
 #endif
 
 #endif /* __SMARTCARD_AUTH_TOKEN_H__ */
