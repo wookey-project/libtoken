@@ -618,6 +618,11 @@ static int token_apdu_cmd_encrypt(token_channel *channel, SC_APDU_cmd *apdu){
 	if(hmac_len != sizeof(hmac)){
 		goto err;
 	}
+	/* Double check against faults */
+	if(apdu->lc > (SHORT_APDU_LC_MAX - sizeof(hmac))){
+		/* Not enough room for our HMAC */
+		goto err;
+	}
 	memcpy(&(apdu->data[apdu->lc]), hmac, sizeof(hmac));
 	apdu->lc += sizeof(hmac);
 

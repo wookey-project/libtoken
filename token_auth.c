@@ -10,6 +10,11 @@
 #include "libc/string.h"
 #include "libc/sanhandlers.h"
 
+#ifdef FIDO_PROFILE
+/* Specific to the FIDO platform case */
+#include "libfido.h"
+#endif
+
 #define SMARTCARD_DEBUG
 #define MEASURE_TOKEN_PERF
 
@@ -53,7 +58,7 @@ int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int p
 
         /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
-        add_iv(enc_IV, 1);
+        add_iv(enc_IV, 1); /* Mandatory increment by one even if Lc = 0 */
 
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_SDPWD; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = sdpwd_len; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
@@ -109,13 +114,12 @@ int auth_token_get_sdpwd(token_channel *channel, const char *pin, unsigned int p
 	return 0;
 err:
 	return -1;
-
 }
 
 
 
 
-/* Get key and its derivative */
+/* Get master key and its derivative */
 int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin_len, unsigned char *key, unsigned int key_len, unsigned char *h_key, unsigned int h_key_len){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
@@ -150,7 +154,7 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 
         /* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
         memcpy(enc_IV, channel->IV, sizeof(enc_IV));
-        add_iv(enc_IV, 1);
+        add_iv(enc_IV, 1); /* Mandatory increment by one even if Lc = 0 */
 
 	apdu.cla = 0x00; apdu.ins = TOKEN_INS_GET_KEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (key_len + h_key_len); apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
@@ -207,9 +211,12 @@ int auth_token_get_key(token_channel *channel, const char *pin, unsigned int pin
 	return 0;
 err:
 	return -1;
-
 }
 
+/*************************************************************************************/
+/*************************************************************************************/
+/*************************************************************************************/
+/*************************************************************************************/
 static cb_token_request_pin_t external_request_pin = NULL;
 static char saved_user_pin[32] = { 0 };
 static char saved_user_pin_len = 0;
@@ -253,15 +260,15 @@ err:
 /* We provide two callbacks: one to ask for the PET pin, the other to
  * ask for the user PIN while showing the PET name to get confirmation.
  */
-int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, unsigned char *AES_CBC_ESSIV_key, unsigned int AES_CBC_ESSIV_key_len, unsigned char *AES_CBC_ESSIV_h_key, unsigned int AES_CBC_ESSIV_h_key_len, unsigned char *sdpwd, unsigned int sdpwd_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
+int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, unsigned char *MASTER_key, unsigned int MASTER_key_len, unsigned char *MASTER_h_key, unsigned int MASTER_h_key_len, unsigned char *sdpwd, unsigned int sdpwd_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num){
 	/* Sanity checks */
 	if(channel == NULL){
 		goto err;
 	}
-	if((AES_CBC_ESSIV_key == NULL) || (AES_CBC_ESSIV_h_key == NULL)){
+	if((MASTER_key == NULL) || (MASTER_h_key == NULL)){
 		goto err;
 	}
-	if((AES_CBC_ESSIV_key_len != 32) || (AES_CBC_ESSIV_h_key_len != 32)){
+	if((MASTER_key_len != 32) || (MASTER_h_key_len != 32)){
 		goto err;
 	}
 	if(sdpwd == NULL){
@@ -281,8 +288,8 @@ int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, 
 	if(auth_token_unlock_ops_exec(channel, ops, sizeof(ops)/sizeof(token_unlock_operations), &local_callbacks, saved_decrypted_keybag, saved_decrypted_keybag_num)){
 		goto err;
 	}
-	/*************** Get the CBC-ESSIV key and its hash */
-	if(auth_token_get_key(channel, saved_user_pin, saved_user_pin_len, AES_CBC_ESSIV_key, AES_CBC_ESSIV_key_len, AES_CBC_ESSIV_h_key, AES_CBC_ESSIV_h_key_len)){
+	/*************** Get the master key and its hash */
+	if(auth_token_get_key(channel, saved_user_pin, saved_user_pin_len, MASTER_key, MASTER_key_len, MASTER_h_key, MASTER_h_key_len)){
 		goto err;
 	}
 	/*************** Get the SD card locking/unlocking password */
@@ -298,3 +305,335 @@ err:
 
 	return -1;
 }
+
+
+/********* FIDO token specific commands **********************************/
+/*************************************************************************/
+#ifdef FIDO_PROFILE
+
+/* Only for FIDO tokens. Send our local platform key secret for key handles computation.
+ */
+int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, unsigned char *hprivkey, unsigned int *hprivkey_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+	/* SHA256 context used to derive our secrets */
+	sha256_context sha256_ctx;
+	/* Digest buffer */
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	/* AES context to encrypt the half key */
+	aes_context aes_context;
+        uint8_t enc_IV[AES_BLOCK_SIZE];
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if((key == NULL) || (hprivkey == NULL) || (hprivkey_len == NULL)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* In order to avoid fault attacks on the token logics without providing a PIN, sensitive
+	 * secrets are encrypted using a key derived from it.
+	 * The KEY used here is a 128-bit AES key as the first half of SHA-256(first_IV || SHA-256(PIN)).
+	 */
+        if(saved_user_pin_len > sizeof(saved_user_pin)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, (const uint8_t*)saved_user_pin, saved_user_pin_len);
+	sha256_final(&sha256_ctx, digest);
+
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, channel->first_IV, sizeof(channel->first_IV));
+	sha256_update(&sha256_ctx, digest, sizeof(digest));
+	sha256_final(&sha256_ctx, digest);
+
+	/* Sanity check on the platform key length */
+	if(key_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Copy IV */
+        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
+	/* Encrypt our command buffer */
+#if defined(__arm__)
+	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+#else
+	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_ENCRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
+#endif
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Encrypt */
+	if(aes_exec(&aes_context, key, apdu.data, key_len, -1, -1)){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
+        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
+        add_iv(enc_IV, 1 + (key_len / AES_BLOCK_SIZE)); /* 2 AES blocks sent + one mandatory increment */
+
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_SEND_PKEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = key_len; apdu.le = 0; apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+
+	/* This is not the length we expect! */
+	if(resp.le != 16){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* We get back the half private FIDO key */
+	if(*hprivkey_len < 16){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Decrypt sensitive data */
+	/* In order to avoid fault attacks on the token logics without providing a PIN, sensitive
+	 * secrets are encrypted using a key derived from it.
+	 * The KEY used here is a 128-bit AES key as the first half of SHA-256(first_IV || SHA-256(PIN)).
+	 */
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, (const uint8_t*)saved_user_pin, saved_user_pin_len);
+	sha256_final(&sha256_ctx, digest);
+
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, channel->first_IV, sizeof(channel->first_IV));
+	sha256_update(&sha256_ctx, digest, sizeof(digest));
+	sha256_final(&sha256_ctx, digest);
+
+	/* Decrypt our response buffer */
+#if defined(__arm__)
+	/* [RB] NOTE: we use a software masked AES for robustness against side channel attacks */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, PROTECTED_AES, NULL, NULL, -1, -1)){
+#else
+	/* [RB] NOTE: if not on our ARM target, we use regular portable implementation for simulations */
+	if(aes_init(&aes_context, digest, AES128, enc_IV, CBC, AES_DECRYPT, AES_SOFT_UNMASKED, NULL, NULL, -1, -1)){
+#endif
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Decrypt */
+	if(aes_exec(&aes_context, resp.data, hprivkey, resp.le, -1, -1)){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	*hprivkey_len = 16;
+
+	return 0;
+err:
+	if(hprivkey_len != NULL){
+		*hprivkey_len = 0;
+	}
+	return -1;
+
+}
+
+/* Only for FIDO tokens. FIDO REGISTER.
+ */
+int auth_token_fido_register(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, unsigned char *key_handle, unsigned int *key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if((app_data == NULL) || (key_handle == NULL) || (key_handle_len == NULL) || (ecdsa_priv_key_len == NULL)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity checks on the lengths.
+	 */
+	if(app_data_len != FIDO_APPLICATION_PARAMETER_SIZE){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+        /* Copy elements */
+        if(FIDO_APPLICATION_PARAMETER_SIZE > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data, app_data, FIDO_APPLICATION_PARAMETER_SIZE);
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_REGISTER; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = FIDO_APPLICATION_PARAMETER_SIZE; apdu.le = 0; apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+
+	/* This is not the length we expect! */
+	if(resp.le != (FIDO_KEY_HANDLE_SIZE + FIDO_PRIV_KEY_SIZE)){
+                printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Now copy the response */
+	if(*key_handle_len < FIDO_KEY_HANDLE_SIZE){
+	        printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	*key_handle_len = FIDO_KEY_HANDLE_SIZE;
+	memcpy(key_handle, resp.data, FIDO_KEY_HANDLE_SIZE);
+	/**/
+	if(*ecdsa_priv_key_len < FIDO_PRIV_KEY_SIZE){
+	        printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	*ecdsa_priv_key_len = FIDO_PRIV_KEY_SIZE;
+	memcpy(ecdsa_priv_key, resp.data + FIDO_KEY_HANDLE_SIZE, FIDO_PRIV_KEY_SIZE);
+
+	return 0;
+err:
+	if(key_handle_len != NULL){
+		*key_handle_len = 0;
+	}
+	if(ecdsa_priv_key_len != NULL){
+		*ecdsa_priv_key_len = 0;
+	}
+	return -1;
+
+}
+
+/* Only for FIDO tokens. FIDO AUTHENTICATE.
+ */
+int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only, bool *check_result){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if((app_data == NULL) || (key_handle == NULL) || (check_result == NULL)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	*check_result = false;
+	if(check_only == 0){
+		if((ecdsa_priv_key == NULL) || (ecdsa_priv_key_len == NULL)){
+        	  printf("%s : %d\n",__FILE__,__LINE__);
+			goto err;
+		}
+	}
+	if(check_only != 0){
+		apdu.ins = TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY;
+	}
+	else{
+		apdu.ins = TOKEN_INS_FIDO_AUTHENTICATE;
+	}
+
+	/* Copy input */
+	if(app_data_len != FIDO_APPLICATION_PARAMETER_SIZE){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+        if(app_data_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data, app_data, FIDO_APPLICATION_PARAMETER_SIZE);
+	if(key_handle_len != FIDO_KEY_HANDLE_SIZE){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+        if(key_handle_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE - FIDO_APPLICATION_PARAMETER_SIZE)){
+        	printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+        }
+        memcpy(apdu.data + FIDO_APPLICATION_PARAMETER_SIZE, key_handle, FIDO_KEY_HANDLE_SIZE);
+	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = (FIDO_APPLICATION_PARAMETER_SIZE + FIDO_KEY_HANDLE_SIZE); apdu.le = 0; apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+
+	if(check_only != 0){
+		if(resp.le != 1){
+                 	printf("%s : %d\n",__FILE__,__LINE__);
+			goto err;
+		}
+		if(resp.data[0] != 0x01){
+			/* Key handle check failed */
+			*check_result = false;
+		}
+		else{
+			/* Key handle check is OK */
+			*check_result = true;
+		}
+		/* If we are in check only mode, this is it, check succeeded! */
+		if(ecdsa_priv_key_len != NULL){
+			*ecdsa_priv_key_len = 0;
+		}
+	}
+	else{
+		/* Not check only mode, get back the private key if possible */
+		if(resp.le == 1){
+			if(resp.data[0] != 0x00){
+                 		printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			/* Key handle check failed ... */
+			*check_result = false;
+		}
+		else{
+			/* This is not the length we expect! */
+			if(resp.le != FIDO_PRIV_KEY_SIZE){
+        		        printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			/* Now copy the response */
+			/**/
+			if(*ecdsa_priv_key_len < FIDO_PRIV_KEY_SIZE){
+	        		printf("%s : %d\n",__FILE__,__LINE__);
+				goto err;
+			}
+			*check_result = true;
+			*ecdsa_priv_key_len = FIDO_PRIV_KEY_SIZE;
+			memcpy(ecdsa_priv_key, resp.data, FIDO_PRIV_KEY_SIZE);
+		}
+	}
+	return 0;
+err:
+	if(check_result != NULL){
+		*check_result = false;
+	}
+	if(ecdsa_priv_key_len != NULL){
+		*ecdsa_priv_key_len = 0;
+	}
+	return -1;
+
+}
+
+#endif
+
+

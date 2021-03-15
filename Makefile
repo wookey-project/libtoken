@@ -28,6 +28,10 @@ CFLAGS += -I$(PROJ_FILES)/externals/libecc/src $(EXTERNAL_CFLAGS) $(LIBSIGN_CFLA
 CFLAGS += -MMD -MP
 # libtoken needs private key access. This access should be declared voluntary in makefiles
 CFLAGS += -I$(PRIVATE_DIR)
+# libtoken can be specialized for FIDO profile (adding specific dedicated AUTH commands)
+ifeq ($(CONFIG_PROJ_NAME),"u2f2")
+CFLAGS += -DFIDO_PROFILE
+endif
 
 #############################################################
 # About library sources
