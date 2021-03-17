@@ -34,6 +34,43 @@
 
 #define MEASURE_TOKEN_PERF
 
+/**** Load the curve parameters once and for all (optimization) ***/
+static volatile bool curve_params_loaded = false;
+static volatile ec_curve_type curr_curve_type = UNKNOWN_CURVE;
+static ec_params g_curve_params;
+
+int load_curve_parameters(ec_curve_type curve_type, ec_params **curve_p)
+{
+    curve_params_loaded = false;
+    if(curve_p == NULL){
+        goto err;
+    }
+    *curve_p = NULL;
+    if((curve_params_loaded == true) && (curr_curve_type == curve_type)){
+        *curve_p = &g_curve_params;
+        curve_params_loaded = true;
+        return 0;
+    }
+    curr_curve_type = UNKNOWN_CURVE;
+    /* libecc internal structure holding the curve parameters */
+    const ec_str_params *the_curve_const_parameters;
+    the_curve_const_parameters = ec_get_curve_params_by_type(curve_type);
+    /* Get out if getting the parameters went wrong */
+    if (the_curve_const_parameters == NULL) {
+            goto err;
+    }
+    /* Now map the curve parameters to our libecc internal representation */
+    import_params(&g_curve_params, the_curve_const_parameters);
+
+    curr_curve_type = curve_type;
+    *curve_p = &g_curve_params;
+    curve_params_loaded = true;
+
+    return 0;
+err:
+    return -1;
+}
+
 /* Token error recovery function */
 void do_error_recovery_sleep(token_channel *channel){
 	if((channel != NULL) && (channel->error_recovery_sleep != 0)){
@@ -261,9 +298,6 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	uint8_t siglen;
         struct ec_sign_context sig_ctx;
         struct ec_verify_context verif_ctx;
-        /* libecc internal structure holding the curve parameters */
-        const ec_str_params *the_curve_const_parameters;
-        ec_params curve_params;
 	/* SHA256 context used to derive our secrets */
 	sha256_context sha256_ctx;
 	/* Shared secret buffer */
@@ -302,34 +336,32 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	/******* Reader answer ***********************************/
         /* Importing specific curve parameters from its type.
          */
-        the_curve_const_parameters = ec_get_curve_params_by_type(curve_type);
-
-        /* Get out if getting the parameters went wrong */
-        if (the_curve_const_parameters == NULL) {
-                goto err;
+        ec_params *curve_params;
+        if(load_curve_parameters(curve_type, &curve_params)){
+		goto err;                
         }
-        /* Now map the curve parameters to our libecc internal representation */
-        import_params(&curve_params, the_curve_const_parameters);
-
-	if(ec_get_sig_len(&curve_params, ECDSA, SHA256, &siglen)){
+        if(curve_params == NULL){
+		goto err;                
+        }
+	if(ec_get_sig_len(curve_params, ECDSA, SHA256, &siglen)){
 		goto err;
 	}
 
 	/* If there is not enough room in the short APDU for Q and the signature, get out */
-	if(((3 * BYTECEIL(curve_params.ec_fp.p_bitlen)) + siglen) > SHORT_APDU_LC_MAX){
+	if(((3 * BYTECEIL(curve_params->ec_fp.p_bitlen)) + siglen) > SHORT_APDU_LC_MAX){
 		goto err;
 	}
 
 	/* Import our platform ECDSA private and public keys */
-	if(ec_structured_priv_key_import_from_buf(&(our_key_pair.priv_key),  &curve_params, decrypted_platform_priv_key_data, decrypted_platform_priv_key_data_len, ECDSA)){
+	if(ec_structured_priv_key_import_from_buf(&(our_key_pair.priv_key),  curve_params, decrypted_platform_priv_key_data, decrypted_platform_priv_key_data_len, ECDSA)){
 		goto err;
 	}
-	if(ec_structured_pub_key_import_from_buf(&(our_key_pair.pub_key),  &curve_params, decrypted_platform_pub_key_data, decrypted_platform_pub_key_data_len, ECDSA)){
+	if(ec_structured_pub_key_import_from_buf(&(our_key_pair.pub_key),  curve_params, decrypted_platform_pub_key_data, decrypted_platform_pub_key_data_len, ECDSA)){
 		goto err;
 	}
 
         /* Initialize our projective point with the curve parameters */
-        prj_pt_init(&Q, &(curve_params.ec_curve));
+        prj_pt_init(&Q, &(curve_params->ec_curve));
 
         /* Generate our ECDH parameters: a private scalar d and a public value Q = dG where G is the
          * curve generator.
@@ -338,7 +370,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	 * primitive to handle the random private scalar d and its public counter part dG.
          */
         nn_init(&d, 0);
-        if (nn_get_random_mod(&d, &(curve_params.ec_gen_order))) {
+        if (nn_get_random_mod(&d, &(curve_params->ec_gen_order))) {
                 goto err;
         }
 #ifdef MEASURE_TOKEN_PERF
@@ -352,16 +384,16 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	 * private d to leak ...
 	 */
 	nn_init(&scalar_b, 0);
-        if (nn_get_random_mod(&scalar_b, &(curve_params.ec_gen_order))) {
+        if (nn_get_random_mod(&scalar_b, &(curve_params->ec_gen_order))) {
                 goto err;
         }
-        if(prj_pt_mul_monty_blind(&Q, &d, &(curve_params.ec_gen), &scalar_b, &(curve_params.ec_gen_order))){
+        if(prj_pt_mul_monty_blind(&Q, &d, &(curve_params->ec_gen), &scalar_b, &(curve_params->ec_gen_order))){
 		goto err;
 	}
 	/* Clear blinding scalar */
 	nn_uninit(&scalar_b);
 #else
-        prj_pt_mul_monty(&Q, &d, &(curve_params.ec_gen));
+        prj_pt_mul_monty(&Q, &d, &(curve_params->ec_gen));
 #endif
 
 #ifdef MEASURE_TOKEN_PERF
@@ -378,10 +410,10 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
          * of an element in Fp.
          */
         if(prj_pt_export_to_buf(&Q, apdu.data,
-                             3 * BYTECEIL(curve_params.ec_fp.p_bitlen))){
+                             3 * BYTECEIL(curve_params->ec_fp.p_bitlen))){
 		goto err;
 	}
-	apdu.lc = 3 * BYTECEIL(curve_params.ec_fp.p_bitlen);
+	apdu.lc = 3 * BYTECEIL(curve_params->ec_fp.p_bitlen);
 
 	/* Now compute the ECDSA signature of Q */
         if(ec_sign_init(&sig_ctx, &our_key_pair, ECDSA, SHA256)){
@@ -424,12 +456,12 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 		}
 		goto err;
 	}
-	if(resp.le != ((3 * BYTECEIL(curve_params.ec_fp.p_bitlen)) + (uint32_t)siglen)){
+	if(resp.le != ((3 * BYTECEIL(curve_params->ec_fp.p_bitlen)) + (uint32_t)siglen)){
 		/* This is not the size we are waiting for ... */
 		goto err;
 	}
 	/* Import the token public key */
-	if(ec_structured_pub_key_import_from_buf(&token_pub_key, &curve_params, decrypted_token_pub_key_data, decrypted_token_pub_key_data_len, ECDSA)){
+	if(ec_structured_pub_key_import_from_buf(&token_pub_key, curve_params, decrypted_token_pub_key_data, decrypted_token_pub_key_data_len, ECDSA)){
 		goto err;
 	}
 
@@ -454,7 +486,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 #endif
 
 	/* Signature is OK, now extract the point from the APDU */
-	if(prj_pt_import_from_buf(&Q, resp.data, 3 * BYTECEIL(curve_params.ec_fp.p_bitlen), &(curve_params.ec_curve))){
+	if(prj_pt_import_from_buf(&Q, resp.data, 3 * BYTECEIL(curve_params->ec_fp.p_bitlen), &(curve_params->ec_curve))){
 		/* NB: prj_pt_import_from_buf checks if the point is indeed on the
 		 * curve or not, and returns an error if this is not the case ...
 		 */
@@ -471,10 +503,10 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	 * private d to leak ...
 	 */
 	nn_init(&scalar_b, 0);
-        if (nn_get_random_mod(&scalar_b, &(curve_params.ec_gen_order))) {
+        if (nn_get_random_mod(&scalar_b, &(curve_params->ec_gen_order))) {
                 goto err;
         }
-        if(prj_pt_mul_monty_blind(&Q, &d, &Q, &scalar_b, &(curve_params.ec_gen_order))){
+        if(prj_pt_mul_monty_blind(&Q, &d, &Q, &scalar_b, &(curve_params->ec_gen_order))){
 		goto err;
 	}
 	/* Clear blinding scalar */
@@ -499,23 +531,23 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	/* The shared secret is Q.X, which is 32 bytes:
 	 * we derive our AES 256-bit secret key, our 256-bit HMAC key as well as our initial IV from this value.
 	 */
-	fp_export_to_buf(shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen), &(Q.X));
+	fp_export_to_buf(shared_secret, BYTECEIL(curve_params->ec_fp.p_bitlen), &(Q.X));
 
 	/* AES Key = SHA-256("AES_SESSION_KEY" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (const uint8_t*)"AES_SESSION_KEY", sizeof("AES_SESSION_KEY")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params->ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->AES_key, digest, 16);
 	/* HMAC Key = SHA-256("HMAC_SESSION_KEY" | shared_secret) (256 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (const uint8_t*)"HMAC_SESSION_KEY", sizeof("HMAC_SESSION_KEY")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params->ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, channel->HMAC_key);
 	/* IV = SHA-256("SESSION_IV" | shared_secret) (first 128 bits) */
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (const uint8_t*)"SESSION_IV", sizeof("SESSION_IV")-1);
-	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params.ec_fp.p_bitlen));
+	sha256_update(&sha256_ctx, shared_secret, BYTECEIL(curve_params->ec_fp.p_bitlen));
 	sha256_final(&sha256_ctx, digest);
 	memcpy(channel->IV, digest, 16);
 	memcpy(channel->first_IV, channel->IV, 16);
