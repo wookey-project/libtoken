@@ -28,7 +28,7 @@ int auth_token_unlock_ops_exec(token_channel *channel, token_unlock_operations *
 int auth_token_exchanges(token_channel *channel, cb_token_callbacks *callbacks, unsigned char *AES_CBC_ESSIV_key, unsigned int AES_CBC_ESSIV_key_len, unsigned char *AES_CBC_ESSIV_h_key, unsigned int AES_CBC_ESSIV_h_key_len, unsigned char *sdpwd, unsigned int sdpwd_len, databag *saved_decrypted_keybag, uint32_t saved_decrypted_keybag_num);
 
 #ifdef FIDO_PROFILE
-int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, unsigned char *hprivkey, unsigned int *hprivkey_len);
+int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, const unsigned char *hmac, unsigned int hmac_len, unsigned char *hprivkey, unsigned int *hprivkey_len);
 
 int auth_token_fido_register(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, unsigned char *key_handle, unsigned int *key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len);
 
