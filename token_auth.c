@@ -641,6 +641,94 @@ err:
 
 }
 
+/* Only for FIDO tokens. Get our anti-replay counter.
+ */
+int auth_token_fido_get_replay_counter(token_channel *channel, unsigned char *counter, unsigned int *counter_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if((counter == NULL) || (counter_len == NULL)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	
+
+	apdu.ins = TOKEN_INS_FIDO_GET_REPLAY_COUNTER;
+	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (*counter_len); apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+	if(resp.le > *counter_len){
+		goto err;
+	}
+	*counter_len = resp.le;
+	memcpy(counter, counter_len, resp.le);
+
+	return 0;
+err:
+	if(counter_len != NULL){
+		*counter_len = 0;
+	}
+	return -1;
+}
+
+/* Only for FIDO tokens. Set our anti-replay counter.
+ */
+int auth_token_fido_set_replay_counter(token_channel *channel, const unsigned char *counter, unsigned int counter_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if(counter == NULL){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Sanity check */
+	if(counter_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	memcpy(apdu.data, counter, counter_len);
+	apdu.ins = TOKEN_INS_FIDO_SET_REPLAY_COUNTER;
+	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = counter_len; apdu.le = 0; apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+	if(resp.le != 0){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	return 0;
+err:
+	return -1;
+}
+
+
 #endif
 
 

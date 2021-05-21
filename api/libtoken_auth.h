@@ -15,6 +15,8 @@ enum auth_token_instructions {
         TOKEN_INS_FIDO_REGISTER = 0x13,
         TOKEN_INS_FIDO_AUTHENTICATE = 0x14,
         TOKEN_INS_FIDO_AUTHENTICATE_CHECK_ONLY = 0x15,
+	TOKEN_INS_FIDO_GET_REPLAY_COUNTER = 0x16,
+	TOKEN_INS_FIDO_SET_REPLAY_COUNTER = 0x17,
 #endif
 };
 
@@ -33,6 +35,10 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 int auth_token_fido_register(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, unsigned char *key_handle, unsigned int *key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len);
 
 int auth_token_fido_authenticate(token_channel *channel, const unsigned char *app_data, unsigned int app_data_len, const unsigned char *key_handle, unsigned int key_handle_len, unsigned char *ecdsa_priv_key, unsigned int *ecdsa_priv_key_len, unsigned char check_only, bool *check_result);
+
+int auth_token_fido_get_replay_counter(token_channel *channel, unsigned char *counter, unsigned int *counter_len);
+
+int auth_token_fido_set_replay_counter(token_channel *channel, const unsigned char *counter, unsigned int counter_len);
 #endif
 
 #endif /* __SMARTCARD_AUTH_TOKEN_H__ */
