@@ -313,7 +313,7 @@ err:
 
 /* Only for FIDO tokens. Send our local platform key secret for key handles computation.
  */
-int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, unsigned char *hprivkey, unsigned int *hprivkey_len){
+int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, unsigned int key_len, const unsigned char *hmac, unsigned int hmac_len, unsigned char *hprivkey, unsigned int *hprivkey_len){
 	SC_APDU_cmd apdu;
 	SC_APDU_resp resp;
 	/* SHA256 context used to derive our secrets */
@@ -329,7 +329,7 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 		goto err;
 	}
 	/* Sanity check */
-	if((key == NULL) || (hprivkey == NULL) || (hprivkey_len == NULL)){
+	if((key == NULL) || (hmac == NULL) || (hprivkey == NULL) || (hprivkey_len == NULL)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
@@ -342,6 +342,12 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
         }
+
+	/* Check HMAC SHA-256 length */
+	if(hmac_len != SHA256_DIGEST_SIZE){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err; 
+	}
 	sha256_init(&sha256_ctx);
 	sha256_update(&sha256_ctx, (const uint8_t*)saved_user_pin, saved_user_pin_len);
 	sha256_final(&sha256_ctx, digest);
@@ -352,7 +358,7 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 	sha256_final(&sha256_ctx, digest);
 
 	/* Sanity check on the platform key length */
-	if(key_len > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
+	if((key_len + hmac_len) > (SHORT_APDU_LE_MAX - SHA256_DIGEST_SIZE)){
         	printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
@@ -372,16 +378,14 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
 	}
 
 	/* Encrypt */
-	if(aes_exec(&aes_context, key, apdu.data, key_len, -1, -1)){
+	memcpy(&apdu.data[0], key, key_len);
+	memcpy(&apdu.data[key_len], hmac, hmac_len);
+	if(aes_exec(&aes_context, apdu.data, apdu.data, (key_len + hmac_len), -1, -1)){
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
 
-	/* Save the current IV and compute the AES-CBC IV (current IV incremented by 1) */
-        memcpy(enc_IV, channel->IV, sizeof(enc_IV));
-        add_iv(enc_IV, 1 + (key_len / AES_BLOCK_SIZE)); /* 2 AES blocks sent + one mandatory increment */
-
-	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_SEND_PKEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = key_len; apdu.le = 0; apdu.send_le = 1;
+	apdu.cla = 0x00; apdu.ins = TOKEN_INS_FIDO_SEND_PKEY; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = (key_len + hmac_len); apdu.le = 0; apdu.send_le = 1;
 	if(token_send_receive(channel, &apdu, &resp)){
           printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
@@ -403,6 +407,9 @@ int auth_token_fido_send_pkey(token_channel *channel, const unsigned char *key, 
                 printf("%s : %d\n",__FILE__,__LINE__);
 		goto err;
 	}
+
+	/* Compute the AES-CBC IV (current IV incremented by some blocks and 1) */
+        add_iv(enc_IV, 1 + ((key_len + hmac_len) / AES_BLOCK_SIZE)); /* 4 AES blocks sent + one mandatory increment */
 	/* Decrypt sensitive data */
 	/* In order to avoid fault attacks on the token logics without providing a PIN, sensitive
 	 * secrets are encrypted using a key derived from it.
@@ -633,6 +640,94 @@ err:
 	return -1;
 
 }
+
+/* Only for FIDO tokens. Get our anti-replay counter.
+ */
+int auth_token_fido_get_replay_counter(token_channel *channel, unsigned char *counter, unsigned int *counter_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if((counter == NULL) || (counter_len == NULL)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	
+
+	apdu.ins = TOKEN_INS_FIDO_GET_REPLAY_COUNTER;
+	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = 0; apdu.le = (*counter_len); apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+	if(resp.le > *counter_len){
+		goto err;
+	}
+	*counter_len = resp.le;
+	memcpy(counter, counter_len, resp.le);
+
+	return 0;
+err:
+	if(counter_len != NULL){
+		*counter_len = 0;
+	}
+	return -1;
+}
+
+/* Only for FIDO tokens. Set our anti-replay counter.
+ */
+int auth_token_fido_set_replay_counter(token_channel *channel, const unsigned char *counter, unsigned int counter_len){
+	SC_APDU_cmd apdu;
+	SC_APDU_resp resp;
+
+	if((channel == NULL) || (channel->channel_initialized == 0)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	/* Sanity check */
+	if(counter == NULL){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	/* Sanity check */
+	if(counter_len > (SHORT_APDU_LC_MAX - SHA256_DIGEST_SIZE)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+	memcpy(apdu.data, counter, counter_len);
+	apdu.ins = TOKEN_INS_FIDO_SET_REPLAY_COUNTER;
+	apdu.cla = 0x00; apdu.p1 = 0x00; apdu.p2 = 0x00; apdu.lc = counter_len; apdu.le = 0; apdu.send_le = 1;
+	if(token_send_receive(channel, &apdu, &resp)){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	if((resp.sw1 != (TOKEN_RESP_OK >> 8)) || (resp.sw2 != (TOKEN_RESP_OK & 0xff))){
+                 printf("%s : %d\n",__FILE__,__LINE__);
+		/* The smartcard responded an error */
+		goto err;
+	}
+	if(resp.le != 0){
+          printf("%s : %d\n",__FILE__,__LINE__);
+		goto err;
+	}
+
+	return 0;
+err:
+	return -1;
+}
+
 
 #endif
 

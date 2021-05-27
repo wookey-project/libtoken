@@ -132,6 +132,7 @@ typedef enum {
     TOKEN_MAP_VOLUNTARY
 } token_map_mode_t;
 
+int load_curve_parameters(ec_curve_type curve_type, ec_params **curve_p);
 
 /* We define here the type of AES we use to protect the channel to
  * communicate with the token.
