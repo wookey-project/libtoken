@@ -674,7 +674,7 @@ int auth_token_fido_get_replay_counter(token_channel *channel, unsigned char *co
 		goto err;
 	}
 	*counter_len = resp.le;
-	memcpy(counter, counter_len, resp.le);
+	memcpy(counter, resp.data, resp.le);
 
 	return 0;
 err:
