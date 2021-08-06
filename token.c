@@ -292,9 +292,6 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
         /* The projective point we will use */
         prj_pt Q;
         nn d;
-#ifdef USE_SIG_BLINDING
-	nn scalar_b;
-#endif
 	uint8_t siglen;
         struct ec_sign_context sig_ctx;
         struct ec_verify_context verif_ctx;
@@ -380,18 +377,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 #endif
         /* Q = dG */
 #ifdef USE_SIG_BLINDING
-	/* NB: we use a blind scalar multiplication here since we do not want our
-	 * private d to leak ...
-	 */
-	nn_init(&scalar_b, 0);
-        if (nn_get_random_mod(&scalar_b, &(curve_params->ec_gen_order))) {
-                goto err;
-        }
-        if(prj_pt_mul_monty_blind(&Q, &d, &(curve_params->ec_gen), &scalar_b, &(curve_params->ec_gen_order))){
+        if(prj_pt_mul_monty_blind(&Q, &d, &(curve_params->ec_gen))){
 		goto err;
 	}
-	/* Clear blinding scalar */
-	nn_uninit(&scalar_b);
 #else
         prj_pt_mul_monty(&Q, &d, &(curve_params->ec_gen));
 #endif
@@ -416,7 +404,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 	apdu.lc = 3 * BYTECEIL(curve_params->ec_fp.p_bitlen);
 
 	/* Now compute the ECDSA signature of Q */
-        if(ec_sign_init(&sig_ctx, &our_key_pair, ECDSA, SHA256)){
+        if(ec_sign_init(&sig_ctx, &our_key_pair, ECDSA, SHA256, NULL, 0)){
 		goto err;
 	}
 	if(ec_sign_update(&sig_ctx, (const uint8_t*)apdu.data, apdu.lc)){
@@ -470,7 +458,7 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 #endif
 
 	/* Verify the signature */
-	if(ec_verify_init(&verif_ctx, &token_pub_key, &(resp.data[resp.le-siglen]), siglen, ECDSA, SHA256)){
+	if(ec_verify_init(&verif_ctx, &token_pub_key, &(resp.data[resp.le-siglen]), siglen, ECDSA, SHA256, NULL, 0)){
 		goto err;
 	}
 	if(ec_verify_update(&verif_ctx, resp.data, resp.le-siglen)){
@@ -499,18 +487,9 @@ static int token_negotiate_secure_channel(token_channel *channel, const unsigned
 
 	/* Now compute dQ where d is our secret */
 #ifdef USE_SIG_BLINDING
-	/* NB: we use a blind scalar multiplication here since we do not want our
-	 * private d to leak ...
-	 */
-	nn_init(&scalar_b, 0);
-        if (nn_get_random_mod(&scalar_b, &(curve_params->ec_gen_order))) {
-                goto err;
-        }
-        if(prj_pt_mul_monty_blind(&Q, &d, &Q, &scalar_b, &(curve_params->ec_gen_order))){
+        if(prj_pt_mul_monty_blind(&Q, &d, &Q)){
 		goto err;
 	}
-	/* Clear blinding scalar */
-	nn_uninit(&scalar_b);
 #else
         prj_pt_mul_monty(&Q, &d, &Q);
 #endif
